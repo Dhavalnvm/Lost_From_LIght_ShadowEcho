@@ -1,0 +1,30 @@
+# ShadowEcho — Python Dependencies
+# Install: pip install -r requirements.txt
+
+# API
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+pydantic==2.9.0
+python-dotenv==1.0.1
+
+# LLM
+ollama==0.3.3
+
+# Embeddings & Vector Store
+chromadb==0.5.5
+FlagEmbedding==1.2.11
+torch>=2.0.0
+
+# Database
+aiosqlite==0.20.0
+
+# Data Collection
+telethon==1.37.0
+praw==7.7.1
+requests[socks]==2.32.0
+PySocks==1.7.1
+beautifulsoup4==4.12.3
+stem==1.8.2
+
+# Utilities
+httpx==0.27.0
