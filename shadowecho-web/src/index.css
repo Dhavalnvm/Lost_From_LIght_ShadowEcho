@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -12,29 +14,11 @@
   }
 
   body {
-    background-color: #080b0f;
-    color: #e8edf5;
+    margin: 0;
+    background-color: #071018;
+    color: #edf5f1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: #0d1117;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #1c2535;
-    border-radius: 2px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #2a3a52;
   }
 }
 
@@ -46,8 +30,15 @@
     overflow: hidden;
   }
 
+  .line-clamp-4 {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #1c2535 #0d1117;
+    scrollbar-color: rgba(91, 228, 183, 0.24) rgba(11, 19, 29, 0.7);
   }
 }

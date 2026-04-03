@@ -10,45 +10,94 @@ const Topbar: React.FC = () => {
 
   return (
     <header
-      className="h-[72px] border-b border-white/10 flex items-center justify-between px-8 sticky top-0 z-50"
+      className="sticky top-0 z-30 flex items-center justify-between border-b px-6 py-4 backdrop-blur-xl"
       style={{
-        background: 'rgba(6,14,26,0.9)',
-        backdropFilter: 'blur(16px)',
+        background: 'linear-gradient(180deg, rgba(7,16,24,0.92), rgba(7,16,24,0.78))',
+        borderColor: 'rgba(128, 152, 168, 0.12)',
       }}
     >
-      {/* LEFT */}
-      <div className="flex items-center gap-5">
-        <img
-          src="/shadowecho-logo.png"
-          alt="ShadowEcho"
-          className="h-14 sm:h-16 w-auto object-contain select-none"
+      <div className="flex items-center gap-4">
+        <div
+          className="grid h-12 w-12 place-items-center rounded-2xl border"
           style={{
-            filter: 'drop-shadow(0 0 8px rgba(0,255,150,0.25))',
+            borderColor: 'rgba(91, 228, 183, 0.22)',
+            background: 'linear-gradient(135deg, rgba(91,228,183,0.14), rgba(135,191,255,0.1))',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
           }}
-          draggable={false}
-        />
+        >
+          <img
+            src="/shadowecho-logo.png"
+            alt="ShadowEcho"
+            className="h-8 w-8 object-contain select-none"
+            draggable={false}
+          />
+        </div>
 
-        <div className="hidden lg:flex flex-col leading-tight">
-          <span className="text-[13px] tracking-[3px] text-gray-300 font-mono">
-            THREAT INTELLIGENCE
-          </span>
-          <span className="text-[10px] tracking-[2px] text-gray-500 font-mono">
-            REAL-TIME DARK WEB MONITORING
-          </span>
+        <div className="min-w-0">
+          <div
+            className="font-mono text-[10px] uppercase"
+            style={{ color: 'rgba(157, 176, 188, 0.72)', letterSpacing: '0.26em' }}
+          >
+            SecOps Command Surface
+          </div>
+          <div className="mt-1 flex items-center gap-3">
+            <span
+              className="font-['Sora'] text-[20px] font-semibold"
+              style={{ color: '#edf5f1' }}
+            >
+              ShadowEcho
+            </span>
+            <span
+              className="rounded-full border px-3 py-1 font-mono text-[9px] uppercase"
+              style={{
+                borderColor: 'rgba(135, 191, 255, 0.2)',
+                color: 'rgba(175, 212, 234, 0.84)',
+                letterSpacing: '0.18em',
+                background: 'rgba(135, 191, 255, 0.08)',
+              }}
+            >
+              Threat Monitoring
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* RIGHT */}
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2 px-4 py-1.5 rounded-md border border-green-400/30 bg-green-400/10">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          <span className="text-[11px] tracking-[2px] font-mono text-green-400">
-            LIVE
+      <div className="flex items-center gap-3">
+        <div
+          className="hidden items-center gap-2 rounded-full border px-4 py-2 md:flex"
+          style={{
+            borderColor: 'rgba(128, 152, 168, 0.16)',
+            background: 'rgba(17, 29, 43, 0.72)',
+          }}
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-[#5be4b7] shadow-[0_0_12px_rgba(91,228,183,0.85)]" />
+          <span
+            className="font-mono text-[10px] uppercase"
+            style={{ color: '#d8efe8', letterSpacing: '0.2em' }}
+          >
+            Detection Pipeline Live
           </span>
         </div>
 
-        <div className="font-mono text-base text-gray-300 tabular-nums">
-          {time.toLocaleTimeString()}
+        <div
+          className="rounded-[18px] border px-4 py-2"
+          style={{
+            borderColor: 'rgba(128, 152, 168, 0.14)',
+            background: 'linear-gradient(180deg, rgba(17,29,43,0.82), rgba(13,23,35,0.86))',
+          }}
+        >
+          <div
+            className="font-mono text-[9px] uppercase"
+            style={{ color: 'rgba(157, 176, 188, 0.56)', letterSpacing: '0.16em' }}
+          >
+            Local Time
+          </div>
+          <div
+            className="mt-1 font-['Sora'] text-base font-semibold tabular-nums"
+            style={{ color: '#edf5f1' }}
+          >
+            {time.toLocaleTimeString()}
+          </div>
         </div>
       </div>
     </header>
