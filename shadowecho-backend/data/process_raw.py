@@ -6,192 +6,327 @@ into a unified format ready for ChromaDB loading.
 Input:  data/raw/**/*.json  (raw scraper output)
 Output: data/processed/all_posts.json  (normalized, deduplicated)
 
+INCREMENTAL: On each run, loads existing all_posts.json and only adds
+posts whose IDs are not already present. Safe to run repeatedly.
+
 Run: python data/process_raw.py
+     python data/process_raw.py --reset    # wipe and reprocess from scratch
 """
 
+import sys
+import re
 import json
 import hashlib
 import logging
+import argparse
+import unicodedata
 from pathlib import Path
 from datetime import datetime, timezone
+
+# Fix: allow running from any directory
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BACKEND_ROOT))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("processor")
 
-RAW_DIR = Path(__file__).parent.parent / "raw"
-PROCESSED_DIR = Path(__file__).parent.parent / "processed"
-
 # ---------------------------------------------------------------------------
-# UNIFIED POST SCHEMA
-# Every post from every source gets normalized to this shape.
-# This is what ChromaDB and the rest of the pipeline consume.
+# PATHS
 # ---------------------------------------------------------------------------
 
-"""
-{
-    "id": "sha256_hash_16chars",
-    "source": "dread | breachforums | telegram | reddit | paste | archive",
-    "forum_type": "dread | breachforums | paste | telegram | reddit",
-    "title": "Post title or empty",
-    "body": "Main text content",
-    "text": "title + body combined — this is what gets embedded",
-    "author": "username or anonymous",
-    "timestamp": "ISO 8601 or empty",
-    "url": "link to original post or empty",
-    "scraped_at": "ISO 8601",
-    "metadata": {
-        "char_count": 150,
-        "has_credentials": false,
-        "has_ioc": false,
-        "language": "en"
-    }
-}
-"""
+RAW_DIR       = BACKEND_ROOT / "data" / "raw"
+PROCESSED_DIR = BACKEND_ROOT / "data" / "processed"
+OUTPUT_FILE   = PROCESSED_DIR / "all_posts.json"
 
+# Minimum character length for a post to be embedded
+MIN_TEXT_LENGTH = 20
+
+
+# ---------------------------------------------------------------------------
+# TEXT SANITIZATION — prevents Ollama 500 errors
+# ---------------------------------------------------------------------------
+
+def sanitize_text(value) -> str:
+    """
+    Coerce any value to a clean UTF-8 string safe for bge-m3 embedding.
+    Handles: None, float NaN, int, bool, lists, dicts, stray control chars.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        # catches NaN, inf
+        return "" if (value != value or value == float("inf") or value == float("-inf")) else str(int(value))
+    if isinstance(value, (int, bool)):
+        return str(value)
+    if isinstance(value, (list, dict)):
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except Exception:
+            return ""
+
+    text = str(value)
+
+    # Normalize unicode (NFC)
+    try:
+        text = unicodedata.normalize("NFC", text)
+    except Exception:
+        pass
+
+    # Strip null bytes and control characters (keep \n \t \r)
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text)
+
+    # Collapse excessive whitespace
+    text = re.sub(r"[ \t]{3,}", "  ", text)
+    text = re.sub(r"\n{4,}", "\n\n\n", text)
+
+    return text.strip()
+
+
+def safe_field(raw: dict, *keys, fallback: str = "") -> str:
+    """Try multiple keys in order, sanitize the first non-empty result."""
+    for key in keys:
+        val = raw.get(key)
+        cleaned = sanitize_text(val)
+        if cleaned:
+            return cleaned
+    return sanitize_text(fallback)
+
+
+# ---------------------------------------------------------------------------
+# IOC / CREDENTIAL DETECTION
+# ---------------------------------------------------------------------------
+
+def has_credential_pattern(text: str) -> bool:
+    patterns = [
+        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+        r"(?i)(password|passwd|pwd)\s*[:=]\s*\S+",
+        r"(?i)(api[_-]?key|token|secret)\s*[:=]\s*\S+",
+        r"\b[a-fA-F0-9]{32,64}\b",
+    ]
+    return any(re.search(p, text) for p in patterns)
+
+
+def has_ioc_pattern(text: str) -> bool:
+    patterns = [
+        r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b",
+        r"(?i)(CVE-\d{4}-\d{4,})",
+        r"(?i)(https?://[^\s]+\.onion\b)",
+        r"\b[a-fA-F0-9]{64}\b",
+        r"(?i)\b(ransomware|malware|exploit|zero-?day|botnet|c2|c&c)\b",
+    ]
+    return any(re.search(p, text) for p in patterns)
+
+
+# ---------------------------------------------------------------------------
+# ID GENERATION
+# ---------------------------------------------------------------------------
 
 def generate_id(text: str, source: str) -> str:
-    """Deterministic ID from content + source — same post = same ID = auto-dedup."""
+    """Deterministic ID — same post = same ID = auto-dedup."""
     raw = f"{source}:{text[:200]}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
-def has_credential_pattern(text: str) -> bool:
-    """Quick check for credential-like patterns in text."""
-    import re
-    patterns = [
-        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",  # email
-        r"(?i)(password|passwd|pwd)\s*[:=]\s*\S+",             # password fields
-        r"(?i)(api[_-]?key|token|secret)\s*[:=]\s*\S+",       # API keys
-        r"\b[a-fA-F0-9]{32,64}\b",                             # hashes (MD5/SHA)
-    ]
-    for p in patterns:
-        if re.search(p, text):
-            return True
-    return False
-
-
-def has_ioc_pattern(text: str) -> bool:
-    """Quick check for IOC-like patterns."""
-    import re
-    patterns = [
-        r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b",                     # IPv4
-        r"(?i)(CVE-\d{4}-\d{4,})",                                       # CVE IDs
-        r"(?i)(https?://[^\s]+\.onion\b)",                                # .onion URLs
-        r"\b[a-fA-F0-9]{64}\b",                                          # SHA256 hashes
-        r"(?i)\b(ransomware|malware|exploit|zero-?day|botnet|c2|c&c)\b", # threat keywords
-    ]
-    for p in patterns:
-        if re.search(p, text):
-            return True
-    return False
-
+# ---------------------------------------------------------------------------
+# NORMALIZE
+# ---------------------------------------------------------------------------
 
 def normalize_post(raw: dict, default_source: str = "unknown") -> dict | None:
-    """Normalize a single raw post into unified schema."""
-    title = raw.get("title", "").strip()
-    body = raw.get("body", raw.get("content", raw.get("text", ""))).strip()
-    text = f"{title}\n{body}".strip() if title else body
+    """
+    Normalize a single raw post into unified schema.
+    All string fields are sanitized to prevent NaN/null/control-char
+    values from reaching the Ollama embedding API.
+    """
+    title = safe_field(raw, "title")
+    body  = safe_field(raw, "body", "content", "text")
 
-    # Skip empty posts
-    if len(text) < 10:
+    # Build the combined text that will be embedded
+    if title and body:
+        text = f"{title}\n{body}"
+    elif title:
+        text = title
+    else:
+        text = body
+
+    text = text.strip()
+
+    # Hard minimum
+    if len(text) < MIN_TEXT_LENGTH:
         return None
 
-    source = raw.get("source", default_source)
-    post_id = raw.get("id", generate_id(text, source))
+    # Source name — Reddit posts get subreddit-qualified names
+    raw_source = sanitize_text(raw.get("source", default_source)) or default_source
+    subreddit  = sanitize_text(raw.get("subreddit", ""))
+    if raw_source == "reddit" and subreddit:
+        source = f"reddit_r_{subreddit}"
+    else:
+        source = raw_source
+
+    post_id = sanitize_text(raw.get("id", "")) or generate_id(text, source)
+
+    metadata: dict = {
+        "char_count":      len(text),
+        "has_credentials": has_credential_pattern(text),
+        "has_ioc":         has_ioc_pattern(text),
+    }
+    if subreddit:
+        metadata["subreddit"]    = subreddit
+        metadata["score"]        = int(raw.get("score", 0) or 0)
+        metadata["num_comments"] = int(raw.get("num_comments", 0) or 0)
 
     return {
-        "id": post_id,
-        "source": source,
-        "forum_type": raw.get("forum_type", source),
-        "title": title,
-        "body": body,
-        "text": text,  # ← this is what gets embedded by BGE-M3
-        "author": raw.get("author", raw.get("username", "anonymous")),
-        "timestamp": raw.get("timestamp", raw.get("date", "")),
-        "url": raw.get("link", raw.get("url", raw.get("page_url", ""))),
-        "scraped_at": raw.get("scraped_at", datetime.now(timezone.utc).isoformat()),
-        "metadata": {
-            "char_count": len(text),
-            "has_credentials": has_credential_pattern(text),
-            "has_ioc": has_ioc_pattern(text),
-        },
+        "id":         post_id,
+        "source":     source,
+        "forum_type": sanitize_text(raw.get("forum_type", raw_source)),
+        "title":      title,
+        "body":       body,
+        "text":       text,   # ← this is what bge-m3 will embed
+        "author":     safe_field(raw, "author", "username", fallback="anonymous"),
+        "timestamp":  safe_field(raw, "timestamp", "date"),
+        "url":        safe_field(raw, "link", "url", "page_url"),
+        "scraped_at": safe_field(raw, "scraped_at") or datetime.now(timezone.utc).isoformat(),
+        "metadata":   metadata,
     }
 
 
+# ---------------------------------------------------------------------------
+# LOAD EXISTING (incremental)
+# ---------------------------------------------------------------------------
+
+def load_existing() -> tuple[list[dict], set[str]]:
+    """Load the current all_posts.json. Returns (posts, id_set)."""
+    if not OUTPUT_FILE.exists():
+        log.info("No existing all_posts.json — starting fresh")
+        return [], set()
+
+    with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+        posts = json.load(f)
+
+    # Re-sanitize existing text fields in case old data has issues
+    fixed = 0
+    for p in posts:
+        original = p.get("text", "")
+        cleaned  = sanitize_text(original)
+        if cleaned != original:
+            p["text"] = cleaned
+            fixed += 1
+
+    ids = {p["id"] for p in posts}
+    log.info(f"Existing all_posts.json: {len(posts)} posts ({fixed} text fields re-sanitized)")
+    return posts, ids
+
+
+# ---------------------------------------------------------------------------
+# LOAD RAW FILES
+# ---------------------------------------------------------------------------
+
 def load_raw_files() -> list[dict]:
-    """Load all JSON files from raw/ subdirectories."""
+    """Walk data/raw/**/*.json and load every record."""
     all_raw = []
 
     if not RAW_DIR.exists():
         log.warning(f"Raw directory not found: {RAW_DIR}")
         return all_raw
 
-    for json_file in RAW_DIR.rglob("*.json"):
+    json_files = sorted(RAW_DIR.rglob("*.json"))
+    if not json_files:
+        log.warning(f"No JSON files found under {RAW_DIR}")
+        return all_raw
+
+    for json_file in json_files:
         try:
             with open(json_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             if isinstance(data, list):
                 all_raw.extend(data)
+                log.info(f"  📄 {json_file.relative_to(BACKEND_ROOT)}: {len(data)} records")
             elif isinstance(data, dict):
                 all_raw.append(data)
-
-            log.info(f"Loaded {json_file.name}: {len(data) if isinstance(data, list) else 1} records")
+                log.info(f"  📄 {json_file.relative_to(BACKEND_ROOT)}: 1 record")
 
         except Exception as e:
-            log.error(f"Failed to load {json_file}: {e}")
+            log.error(f"  ❌ Failed to load {json_file.name}: {e}")
 
     return all_raw
 
 
-def process_all():
-    """Main processing pipeline."""
-    log.info("Loading raw data...")
-    raw_posts = load_raw_files()
-    log.info(f"Total raw records: {len(raw_posts)}")
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
 
-    # Normalize
-    normalized = []
+def process_all(reset: bool = False) -> list[dict]:
+    log.info("=" * 60)
+    log.info("ShadowEcho — process_raw starting")
+    log.info(f"  RAW_DIR     : {RAW_DIR}")
+    log.info(f"  OUTPUT_FILE : {OUTPUT_FILE}")
+    log.info("=" * 60)
+
+    if reset:
+        log.warning("⚠️  --reset flag: wiping existing processed data")
+        existing_posts, existing_ids = [], set()
+    else:
+        existing_posts, existing_ids = load_existing()
+
+    log.info(f"\nScanning {RAW_DIR} for raw JSON files...")
+    raw_posts = load_raw_files()
+    log.info(f"Total raw records found: {len(raw_posts)}")
+
+    if not raw_posts:
+        log.info("Nothing to process.")
+        return existing_posts
+
+    new_posts     = []
+    skipped_short = 0
+    skipped_dupe  = 0
+
     for raw in raw_posts:
         post = normalize_post(raw)
-        if post:
-            normalized.append(post)
+        if post is None:
+            skipped_short += 1
+            continue
+        if post["id"] in existing_ids:
+            skipped_dupe += 1
+            continue
+        existing_ids.add(post["id"])
+        new_posts.append(post)
 
-    log.info(f"After normalization: {len(normalized)} posts")
+    merged = existing_posts + new_posts
 
-    # Deduplicate by ID
-    seen_ids = set()
-    deduped = []
-    for post in normalized:
-        if post["id"] not in seen_ids:
-            seen_ids.add(post["id"])
-            deduped.append(post)
+    log.info("\n📊 Summary:")
+    log.info(f"  Previously processed : {len(existing_posts)}")
+    log.info(f"  Raw records scanned  : {len(raw_posts)}")
+    log.info(f"  Skipped (too short)  : {skipped_short}")
+    log.info(f"  Skipped (duplicates) : {skipped_dupe}")
+    log.info(f"  ✨ New posts added   : {len(new_posts)}")
+    log.info(f"  Total in output      : {len(merged)}")
 
-    log.info(f"After dedup: {len(deduped)} posts")
+    if new_posts:
+        cred_count = sum(1 for p in new_posts if p["metadata"]["has_credentials"])
+        ioc_count  = sum(1 for p in new_posts if p["metadata"]["has_ioc"])
+        sources: dict[str, int] = {}
+        for p in new_posts:
+            sources[p["source"]] = sources.get(p["source"], 0) + 1
+        log.info(f"  New posts with credentials : {cred_count}")
+        log.info(f"  New posts with IOCs        : {ioc_count}")
+        log.info(f"  New posts by source:")
+        for src, count in sorted(sources.items()):
+            log.info(f"    {src}: {count}")
+    else:
+        log.info("  ✅ Nothing new — all raw files already processed.")
 
-    # Stats
-    cred_count = sum(1 for p in deduped if p["metadata"]["has_credentials"])
-    ioc_count = sum(1 for p in deduped if p["metadata"]["has_ioc"])
-    sources = {}
-    for p in deduped:
-        sources[p["source"]] = sources.get(p["source"], 0) + 1
-
-    log.info(f"Posts with credentials: {cred_count}")
-    log.info(f"Posts with IOCs: {ioc_count}")
-    log.info(f"By source: {sources}")
-
-    # Save
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = PROCESSED_DIR / "all_posts.json"
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2, ensure_ascii=False)
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(deduped, f, indent=2, ensure_ascii=False)
+    log.info(f"\n✅ Saved → {OUTPUT_FILE}")
+    log.info("Next step: python data/chroma_loader.py")
 
-    log.info(f"✅ Saved {len(deduped)} processed posts → {output_path}")
-    log.info("Next step: run `python data/chroma_loader.py`")
-
-    return deduped
+    return merged
 
 
 if __name__ == "__main__":
-    process_all()
+    parser = argparse.ArgumentParser(description="ShadowEcho — incremental raw data processor")
+    parser.add_argument("--reset", action="store_true", help="Wipe existing processed data and reprocess from scratch")
+    args = parser.parse_args()
+    process_all(reset=args.reset)

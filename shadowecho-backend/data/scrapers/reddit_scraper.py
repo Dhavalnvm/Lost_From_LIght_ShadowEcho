@@ -5,11 +5,16 @@ Scrapes posts from security-related subreddits via PRAW.
 Usage: python data/scrapers/reddit_scraper.py
 """
 
+import sys
 import json
 import hashlib
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
+
+# Fix: add backend root to path so 'config' is importable from anywhere
+BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(BACKEND_ROOT))
 
 from config import REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USER_AGENT, REDDIT_SUBREDDITS
 
