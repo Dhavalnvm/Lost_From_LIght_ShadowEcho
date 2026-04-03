@@ -115,7 +115,7 @@ const Sidebar: React.FC = () => {
         boxSizing: 'border-box',
       }}
     >
-      <div
+      {/* <div
         style={{
           padding: '26px 24px 20px',
           borderBottom: '1px solid rgba(28, 55, 82, 0.75)',
@@ -159,7 +159,61 @@ const Sidebar: React.FC = () => {
               'linear-gradient(90deg, rgba(0, 200, 240, 0.28) 0%, rgba(0, 200, 240, 0.08) 45%, transparent 100%)',
           }}
         />
-      </div>
+      </div> */}
+
+      <div
+  style={{
+    padding: '20px 20px 16px',
+    borderBottom: '1px solid rgba(28, 55, 82, 0.75)',
+    background:
+      'linear-gradient(180deg, rgba(8, 18, 31, 0.98) 0%, rgba(5, 11, 20, 0.96) 100%)',
+    overflow: 'hidden', // ✅ prevents overflow
+  }}
+>
+  <div style={{ minWidth: 0 }}>
+    <div
+      style={{
+        fontFamily: "'Syne', sans-serif",
+        fontWeight: 800,
+        fontSize: 18, // ✅ reduced from 26
+        letterSpacing: 2.0, // ✅ reduced spacing
+        color: '#ecf6ff',
+        lineHeight: 1.1,
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis', // ✅ prevents breaking layout
+      }}
+    >
+      Shadow<span style={{ color: '#ff445f' }}>Echo</span>
+    </div>
+
+    <div
+      style={{
+        marginTop: 6,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 9,
+        color: '#6a88a6',
+        letterSpacing: 2,
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}
+    >
+      SOC Analysis Console
+    </div>
+  </div>
+
+  <div
+    style={{
+      marginTop: 14,
+      height: 1,
+      background:
+        'linear-gradient(90deg, rgba(0, 200, 240, 0.28) 0%, rgba(0, 200, 240, 0.08) 45%, transparent 100%)',
+    }}
+  />
+</div>
 
       <nav style={{ flex: 1, overflowY: 'auto', padding: '14px 12px 12px' }}>
         {Object.entries(groups).map(([group, items]) => (

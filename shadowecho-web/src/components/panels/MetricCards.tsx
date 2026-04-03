@@ -60,7 +60,7 @@ const MetricCardsPanel: React.FC<MetricCardsProps> = ({ stats, summary }) => {
       label: 'Critical Alerts',
       value: summary.critical,
       sub: `+ ${summary.high} high severity`,
-      accent: 'text-accent-red',
+      accent: 'text-white',
       bg: 'bg-accent-red/5',
       icon: '⬡',
     },
