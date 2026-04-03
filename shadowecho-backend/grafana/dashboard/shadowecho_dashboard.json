@@ -1,0 +1,358 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "📊 SYSTEM OVERVIEW",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          },
+          "mappings": []
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Total Posts Ingested",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "shadowecho_sqlite_posts_total",
+          "legendFormat": "Posts"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Signals Detected",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "shadowecho_sqlite_signals_total",
+          "legendFormat": "Signals"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Total Alerts",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "shadowecho_sqlite_alerts_total",
+          "legendFormat": "Alerts"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Unacked Alerts",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "shadowecho_sqlite_unacked_alerts",
+          "legendFormat": "Unacked"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "green", "value": 0.3 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "Signal/Noise Ratio",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "shadowecho_signal_to_noise_ratio",
+          "legendFormat": "S/N Ratio"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "title": "ChromaDB Documents",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "shadowecho_chromadb_documents",
+          "legendFormat": "Docs"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "🚨 ALERTS & THREATS",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "custom": { "stacking": { "mode": "normal" } } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 10,
+      "options": { "tooltip": { "mode": "multi" } },
+      "title": "Alerts by Severity (over time)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "increase(shadowecho_alerts_fired_total{severity=\"critical\"}[5m])", "legendFormat": "Critical" },
+        { "expr": "increase(shadowecho_alerts_fired_total{severity=\"high\"}[5m])", "legendFormat": "High" },
+        { "expr": "increase(shadowecho_alerts_fired_total{severity=\"medium\"}[5m])", "legendFormat": "Medium" },
+        { "expr": "increase(shadowecho_alerts_fired_total{severity=\"low\"}[5m])", "legendFormat": "Low" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 11,
+      "title": "Posts Ingested by Source",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "increase(shadowecho_posts_ingested_total[5m])", "legendFormat": "{{source}}" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "⚡ PIPELINE PERFORMANCE",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 20,
+      "title": "Pipeline Stage Latency (p95)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(shadowecho_pipeline_duration_seconds_bucket[5m]))", "legendFormat": "{{stage}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 21,
+      "title": "LLM Call Duration (by model)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(shadowecho_llm_call_duration_seconds_bucket[5m]))", "legendFormat": "{{model}} ({{purpose}})" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 23 },
+      "id": 22,
+      "title": "Embedding Latency",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(shadowecho_embedding_duration_seconds_bucket[5m]))", "legendFormat": "{{operation}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 23 },
+      "id": 23,
+      "title": "Signal Score Distribution",
+      "type": "histogram",
+      "targets": [
+        { "expr": "shadowecho_signal_score_bucket", "legendFormat": "{{le}}", "format": "heatmap" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 23 },
+      "id": 24,
+      "title": "HTTP Request Latency (p95 by endpoint)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(shadowecho_http_request_duration_seconds_bucket[5m]))", "legendFormat": "{{endpoint}}" }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "id": 103,
+      "title": "🔍 FEATURE METRICS",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 32 },
+      "id": 30,
+      "title": "Slang Terms Decoded (by language)",
+      "type": "piechart",
+      "targets": [
+        { "expr": "shadowecho_slang_terms_decoded_total", "legendFormat": "{{language}} — {{threat_category}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 32 },
+      "id": 31,
+      "title": "Leak Impact Assessments (by severity)",
+      "type": "piechart",
+      "targets": [
+        { "expr": "shadowecho_leak_impact_assessments_total", "legendFormat": "{{severity}} ({{scale_category}})" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 32 },
+      "id": 32,
+      "title": "Regulations Triggered",
+      "type": "bargauge",
+      "targets": [
+        { "expr": "shadowecho_leak_impact_regulations_triggered_total", "legendFormat": "{{regulation}}" }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "id": 33,
+      "title": "Chatbot Response Time",
+      "type": "timeseries",
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(shadowecho_chatbot_response_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(shadowecho_chatbot_response_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "id": 34,
+      "title": "Analyst Feedback Distribution",
+      "type": "piechart",
+      "targets": [
+        { "expr": "shadowecho_feedback_labels_total", "legendFormat": "{{label}}" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["shadowecho", "threat-intelligence", "hackathon"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "ShadowEcho — Threat Intelligence Dashboard",
+  "uid": "shadowecho-main",
+  "version": 1,
+  "refresh": "10s"
+}

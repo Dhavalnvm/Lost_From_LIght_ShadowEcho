@@ -1,0 +1,25 @@
+# ShadowEcho — Prometheus Configuration
+# Scrapes metrics from the FastAPI app at /metrics
+
+global:
+  scrape_interval: 15s      # how often to scrape
+  evaluation_interval: 15s  # how often to evaluate rules
+  scrape_timeout: 10s
+
+scrape_configs:
+  # ShadowEcho FastAPI app
+  - job_name: "shadowecho"
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels:
+          app: "shadowecho"
+          env: "hackathon"
+    # If running Prometheus on the same machine (not Docker):
+    # - targets: ["localhost:8000"]
+
+  # Ollama metrics (if enabled)
+  # Ollama doesn't expose Prometheus metrics natively,
+  # but you can add a custom exporter later
+  # - job_name: "ollama"
+  #   static_configs:
+  #     - targets: ["localhost:11434"]
