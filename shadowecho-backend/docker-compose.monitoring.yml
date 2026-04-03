@@ -1,0 +1,61 @@
+# ShadowEcho — Monitoring Stack
+# Prometheus + Grafana with auto-provisioned dashboard
+#
+# Usage:
+#   docker-compose -f docker-compose.monitoring.yml up -d
+#
+# Access:
+#   Prometheus: http://localhost:9090
+#   Grafana:    http://localhost:3000 (admin/shadowecho)
+#
+# Your FastAPI app must be running on port 8000 for scraping to work.
+
+version: "3.8"
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: shadowecho-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - shadowecho-monitoring
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: shadowecho-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=shadowecho
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/shadowecho_dashboard.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - shadowecho-monitoring
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  shadowecho-monitoring:
+    driver: bridge

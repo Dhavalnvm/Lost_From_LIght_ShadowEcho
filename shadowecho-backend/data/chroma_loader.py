@@ -4,17 +4,20 @@ Reads processed posts from data/processed/all_posts.json,
 embeds them with bge-m3 via Ollama, and stores in ChromaDB.
 
 INCREMENTAL: Skips posts already in ChromaDB by ID.
-Defensive: Sanitizes and validates all text before sending to Ollama
-           to prevent 500 errors from empty/NaN/control-char inputs.
+RESILIENT:   Small batches (8 texts), per-text truncation at 1500 chars,
+             retry with backoff on timeout, progress saved after every batch
+             so you can Ctrl+C and resume safely.
 
 Run: python data/chroma_loader.py
      python data/chroma_loader.py --reset    # wipe and reload from scratch
      python data/chroma_loader.py --test     # run test queries after loading
+     python data/chroma_loader.py --batch-size 4   # even smaller if still timing out
 """
 
 import json
 import sys
 import re
+import time
 import logging
 import argparse
 import unicodedata
@@ -28,36 +31,37 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("chroma_loader")
 
 # ---------------------------------------------------------------------------
-# PATHS
+# PATHS & CONFIG
 # ---------------------------------------------------------------------------
 
-BACKEND_ROOT   = Path(__file__).resolve().parent.parent
-PROCESSED_FILE = BACKEND_ROOT / "data" / "processed" / "all_posts.json"
-CHROMA_DIR     = BACKEND_ROOT / "vectorstore" / "chroma_db"
+BACKEND_ROOT    = Path(__file__).resolve().parent.parent
+PROCESSED_FILE  = BACKEND_ROOT / "data" / "processed" / "all_posts.json"
+CHROMA_DIR      = BACKEND_ROOT / "vectorstore" / "chroma_db"
 COLLECTION_NAME = "shadowecho_posts"
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 EMBEDDING_MODEL = "bge-m3:567m"
 
+# Tuning — lower these if Ollama keeps timing out
+DEFAULT_BATCH_SIZE = 8          # texts per Ollama request (was 64 — too large)
+MAX_TEXT_CHARS     = 1500       # truncate each text before embedding
+EMBED_TIMEOUT      = 90         # seconds per batch request
+SINGLE_TIMEOUT     = 45         # seconds per single-text fallback request
+MAX_RETRIES        = 3          # retries before giving up on a batch
+RETRY_BACKOFF      = 5          # seconds to wait between retries
+
 
 # ---------------------------------------------------------------------------
-# TEXT SANITIZATION — same logic as process_raw, defensive second pass
+# TEXT SANITIZATION (second-pass — same as process_raw)
 # ---------------------------------------------------------------------------
 
 def sanitize_text(value) -> str:
-    """Coerce any value to a clean UTF-8 string safe for bge-m3."""
     if value is None:
         return ""
     if isinstance(value, float):
-        return "" if (value != value or value == float("inf") or value == float("-inf")) else str(int(value))
+        return "" if (value != value or value in (float("inf"), float("-inf"))) else str(int(value))
     if isinstance(value, (int, bool)):
         return str(value)
-    if isinstance(value, (list, dict)):
-        try:
-            return json.dumps(value, ensure_ascii=False)
-        except Exception:
-            return ""
-
     text = str(value)
     try:
         text = unicodedata.normalize("NFC", text)
@@ -69,20 +73,23 @@ def sanitize_text(value) -> str:
     return text.strip()
 
 
+def prepare_text(raw: str) -> str:
+    """Sanitize and truncate to MAX_TEXT_CHARS so Ollama never gets overloaded."""
+    clean = sanitize_text(raw)
+    if len(clean) > MAX_TEXT_CHARS:
+        clean = clean[:MAX_TEXT_CHARS]
+    return clean
+
+
 def is_embeddable(text: str) -> bool:
-    """Return True only if text is safe to send to Ollama."""
-    if not isinstance(text, str):
-        return False
-    cleaned = sanitize_text(text)
-    return len(cleaned) >= 10   # bge-m3 needs at least something meaningful
+    return isinstance(text, str) and len(text.strip()) >= 10
 
 
 # ---------------------------------------------------------------------------
-# OLLAMA EMBEDDER
+# OLLAMA EMBEDDER — resilient with retry + single-text fallback
 # ---------------------------------------------------------------------------
 
 class OllamaEmbedder:
-    """Wraps Ollama /api/embed with validation and retry logic."""
 
     def __init__(self, base_url: str = OLLAMA_BASE_URL, model: str = EMBEDDING_MODEL):
         self.base_url = base_url
@@ -104,68 +111,75 @@ class OllamaEmbedder:
             log.error("Make sure Ollama is running: ollama serve")
             sys.exit(1)
 
+    def _embed_batch_once(self, texts: list[str]) -> list[list[float]]:
+        """Single attempt at embedding a batch. Raises on failure."""
+        resp = httpx.post(
+            f"{self.base_url}/api/embed",
+            json={"model": self.model, "input": texts},
+            timeout=EMBED_TIMEOUT,
+        )
+        resp.raise_for_status()
+        embeddings = resp.json().get("embeddings", [])
+        # Pad if Ollama returned fewer than expected
+        while len(embeddings) < len(texts):
+            embeddings.append([0.0] * 1024)
+        return embeddings
+
     def _embed_single(self, text: str) -> list[float]:
-        """Embed one text, fallback to zero vector on failure."""
+        """Embed one text with a shorter timeout. Returns zero vector on failure."""
         try:
             resp = httpx.post(
                 f"{self.base_url}/api/embed",
                 json={"model": self.model, "input": [text]},
-                timeout=60,
+                timeout=SINGLE_TIMEOUT,
             )
             resp.raise_for_status()
             embeddings = resp.json().get("embeddings", [])
             if embeddings:
                 return embeddings[0]
         except Exception as e:
-            log.warning(f"Single embed failed for text[:50]='{text[:50]}': {e}")
+            log.warning(f"  Single embed failed for '{text[:40]}…': {e}")
         return [0.0] * 1024
 
-    def embed(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         """
-        Embed a batch of texts via Ollama /api/embed.
-        - Sanitizes every text before sending
-        - Falls back to single-embed if batch fails
-        - Returns zero vectors for anything that still fails
+        Embed a list of texts.
+        - Sanitizes and truncates every text first
+        - Retries the whole batch up to MAX_RETRIES times on timeout
+        - Falls back to one-by-one embedding if batch keeps failing
+        - Returns zero vectors only as a last resort
         """
-        all_embeddings: list[list[float]] = []
+        # Prepare texts — sanitize + truncate
+        prepared = [prepare_text(t) for t in texts]
 
-        for i in range(0, len(texts), batch_size):
-            batch_raw = texts[i:i + batch_size]
-
-            # Sanitize each text in the batch
-            batch = [sanitize_text(t) for t in batch_raw]
-
-            # Flag any that are too short after sanitization
-            bad_indices = [j for j, t in enumerate(batch) if len(t) < 10]
-            if bad_indices:
-                log.warning(f"  ⚠️  {len(bad_indices)} texts too short after sanitize — will use zero vectors")
-
+        # Try the batch with retries
+        for attempt in range(1, MAX_RETRIES + 1):
             try:
-                resp = httpx.post(
-                    f"{self.base_url}/api/embed",
-                    json={"model": self.model, "input": batch},
-                    timeout=120,
-                )
-                resp.raise_for_status()
-                embeddings = resp.json().get("embeddings", [])
-
-                if len(embeddings) != len(batch):
-                    log.warning(f"Batch mismatch: sent {len(batch)}, got {len(embeddings)} — padding")
-                    while len(embeddings) < len(batch):
-                        embeddings.append([0.0] * 1024)
-
-                all_embeddings.extend(embeddings)
-
+                return self._embed_batch_once(prepared)
+            except (httpx.TimeoutException, httpx.ReadTimeout):
+                if attempt < MAX_RETRIES:
+                    log.warning(
+                        f"  Batch timeout (attempt {attempt}/{MAX_RETRIES}) "
+                        f"— retrying in {RETRY_BACKOFF}s..."
+                    )
+                    time.sleep(RETRY_BACKOFF)
+                else:
+                    log.warning(
+                        f"  Batch timed out after {MAX_RETRIES} attempts "
+                        f"— falling back to single embeds"
+                    )
             except Exception as e:
-                log.warning(f"Batch embed failed ({e}) — falling back to single embeds for this batch")
-                # Fall back: embed one by one so one bad post doesn't kill the whole batch
-                for text in batch:
-                    if len(text) >= 10:
-                        all_embeddings.append(self._embed_single(text))
-                    else:
-                        all_embeddings.append([0.0] * 1024)
+                log.warning(f"  Batch embed failed ({e}) — falling back to single embeds")
+                break
 
-        return all_embeddings
+        # Single-text fallback
+        results = []
+        for text in prepared:
+            if is_embeddable(text):
+                results.append(self._embed_single(text))
+            else:
+                results.append([0.0] * 1024)
+        return results
 
 
 # ---------------------------------------------------------------------------
@@ -204,13 +218,34 @@ def load_posts(filepath: Path) -> list[dict]:
     return posts
 
 
+def build_metadata(p: dict) -> dict:
+    """Build a ChromaDB-safe metadata dict (all values must be str/int/float/bool)."""
+    meta = p.get("metadata", {})
+    return {
+        "source":          str(p.get("source", ""))[:200],
+        "forum_type":      str(p.get("forum_type", ""))[:200],
+        "author":          str(p.get("author", "anonymous"))[:200],
+        "timestamp":       str(p.get("timestamp", "")),
+        "url":             str(p.get("url", ""))[:500],
+        "scraped_at":      str(p.get("scraped_at", "")),
+        "title":           str(p.get("title", ""))[:200],
+        "char_count":      int(meta.get("char_count", 0)),
+        "has_credentials": bool(meta.get("has_credentials", False)),
+        "has_ioc":         bool(meta.get("has_ioc", False)),
+        # CSV-derived fields — store if present
+        "threat_category": str(meta.get("threat_category", "")),
+        "severity":        str(meta.get("severity", "")),
+        "risk_score":      int(meta.get("risk_score", 0)),
+    }
+
+
 def batch_insert(
     collection: chromadb.Collection,
     embedder: OllamaEmbedder,
     posts: list[dict],
-    batch_size: int = 64,
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ):
-    # Get existing IDs to skip duplicates
+    # ── Get existing IDs (incremental) ────────────────────────────────────────
     existing_ids: set[str] = set()
     try:
         existing = collection.get()
@@ -220,67 +255,63 @@ def batch_insert(
     except Exception:
         pass
 
-    # Filter to new posts only
+    # ── Filter to new posts only ──────────────────────────────────────────────
     new_posts = [p for p in posts if p["id"] not in existing_ids]
-    log.info(f"New posts to embed: {len(new_posts)} (skipping {len(posts) - len(new_posts)} already in ChromaDB)")
+    log.info(
+        f"New posts to embed: {len(new_posts)} "
+        f"(skipping {len(posts) - len(new_posts)} already in ChromaDB)"
+    )
 
     if not new_posts:
         log.info("✅ Nothing new to embed.")
         return
 
-    # Pre-flight validation — catch bad text before it hits Ollama
-    valid_posts   = []
-    invalid_count = 0
+    # ── Pre-flight validation ─────────────────────────────────────────────────
+    valid_posts: list[dict] = []
+    skipped = 0
     for p in new_posts:
-        raw_text = p.get("text", "")
-        clean    = sanitize_text(raw_text)
-        if len(clean) < 10:
-            log.warning(f"  Skipping post {p['id']} — text too short after sanitize: '{clean[:40]}'")
-            invalid_count += 1
+        text = prepare_text(p.get("text", ""))
+        if not is_embeddable(text):
+            skipped += 1
             continue
-        p["text"] = clean   # store sanitized version
+        p["text"] = text   # store the prepared (truncated) version
         valid_posts.append(p)
 
-    if invalid_count:
-        log.warning(f"  Dropped {invalid_count} posts with unsembeddable text")
-
+    if skipped:
+        log.warning(f"  Dropped {skipped} posts with unembeddable text")
     log.info(f"  Valid posts to embed: {len(valid_posts)}")
 
-    total_batches = (len(valid_posts) + batch_size - 1) // batch_size
+    # ── Embed and insert in small batches ─────────────────────────────────────
+    total_batches  = (len(valid_posts) + batch_size - 1) // batch_size
+    total_inserted = 0
 
     for i in range(0, len(valid_posts), batch_size):
-        batch     = valid_posts[i:i + batch_size]
+        batch     = valid_posts[i : i + batch_size]
         batch_num = (i // batch_size) + 1
 
-        ids    = [p["id"]   for p in batch]
-        texts  = [p["text"] for p in batch]
-
-        metadatas = []
-        for p in batch:
-            meta = p.get("metadata", {})
-            metadatas.append({
-                "source":           str(p.get("source", "")),
-                "forum_type":       str(p.get("forum_type", "")),
-                "author":           str(p.get("author", ""))[:200],
-                "timestamp":        str(p.get("timestamp", "")),
-                "url":              str(p.get("url", ""))[:500],
-                "scraped_at":       str(p.get("scraped_at", "")),
-                "char_count":       int(meta.get("char_count", 0)),
-                "has_credentials":  bool(meta.get("has_credentials", False)),
-                "has_ioc":          bool(meta.get("has_ioc", False)),
-                "title":            str(p.get("title", ""))[:200],
-            })
+        ids       = [p["id"]   for p in batch]
+        texts     = [p["text"] for p in batch]
+        metadatas = [build_metadata(p) for p in batch]
 
         log.info(f"Batch {batch_num}/{total_batches}: embedding {len(texts)} texts...")
-        embeddings = embedder.embed(texts, batch_size=32)
 
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=texts,
-            metadatas=metadatas,
-        )
-        log.info(f"Batch {batch_num}/{total_batches}: ✅ inserted {len(ids)} documents")
+        embeddings = embedder.embed(texts)
+
+        try:
+            collection.add(
+                ids=ids,
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=metadatas,
+            )
+            total_inserted += len(ids)
+            log.info(
+                f"Batch {batch_num}/{total_batches}: ✅ inserted {len(ids)} "
+                f"(total so far: {total_inserted})"
+            )
+        except Exception as e:
+            log.error(f"Batch {batch_num}/{total_batches}: ChromaDB insert failed — {e}")
+            log.error("  Skipping this batch and continuing...")
 
     log.info(f"✅ Loading complete. Collection now has {collection.count()} documents.")
 
@@ -290,15 +321,15 @@ def batch_insert(
 # ---------------------------------------------------------------------------
 
 def test_query(collection: chromadb.Collection, embedder: OllamaEmbedder):
-    test_queries = [
+    queries = [
         "leaked credentials database dump",
         "ransomware attack corporate network",
         "zero day exploit for sale",
     ]
     log.info("\n--- Test Queries ---")
-    for query in test_queries:
-        embedding = embedder.embed([query])
-        results   = collection.query(query_embeddings=embedding, n_results=3)
+    for query in queries:
+        emb     = embedder.embed([query])
+        results = collection.query(query_embeddings=emb, n_results=3)
         log.info(f"\nQuery: '{query}'")
         if results["documents"] and results["documents"][0]:
             for j, (doc, meta, dist) in enumerate(
@@ -315,9 +346,11 @@ def test_query(collection: chromadb.Collection, embedder: OllamaEmbedder):
 
 def main():
     parser = argparse.ArgumentParser(description="Load posts into ChromaDB (Ollama embeddings)")
-    parser.add_argument("--reset", action="store_true", help="Wipe collection and reload from scratch")
-    parser.add_argument("--test",  action="store_true", help="Run test queries after loading")
-    parser.add_argument("--file",  type=str, default=str(PROCESSED_FILE), help="Path to processed JSON")
+    parser.add_argument("--reset",      action="store_true", help="Wipe collection and reload from scratch")
+    parser.add_argument("--test",       action="store_true", help="Run test queries after loading")
+    parser.add_argument("--file",       type=str, default=str(PROCESSED_FILE), help="Path to processed JSON")
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
+                        help=f"Texts per Ollama request (default: {DEFAULT_BATCH_SIZE})")
     args = parser.parse_args()
 
     client = get_chroma_client()
@@ -334,7 +367,8 @@ def main():
 
     embedder = OllamaEmbedder()
     posts    = load_posts(Path(args.file))
-    batch_insert(collection, embedder, posts)
+
+    batch_insert(collection, embedder, posts, batch_size=args.batch_size)
 
     if args.test:
         test_query(collection, embedder)

@@ -8,6 +8,7 @@ Two models, two purposes:
 Both go through Ollama's /api/generate endpoint.
 """
 
+import asyncio
 import json
 import logging
 import httpx
@@ -19,6 +20,13 @@ from config import (
 )
 
 log = logging.getLogger("llm")
+
+# ---------------------------------------------------------------------------
+# GPU MEMORY GUARD
+# Prevents concurrent pipeline LLM calls from exhausting VRAM.
+# Only 1 pipeline call runs at a time; chatbot runs on CPU (num_gpu=0).
+# ---------------------------------------------------------------------------
+_pipeline_semaphore = asyncio.Semaphore(1)
 
 # Load master prompt template
 MASTER_PROMPT_PATH = PROMPTS_DIR / "master_prompt.txt"
@@ -63,6 +71,12 @@ async def call_llm(llm_input: dict) -> dict:
     Pipeline call to llama3.1:8b via Ollama.
     All 5 modules run in one call.
     Returns parsed JSON with module outputs.
+
+    GPU memory notes:
+    - Semaphore ensures only 1 pipeline call runs at a time (no VRAM double-load)
+    - num_ctx=2048 cuts VRAM usage ~40% vs default 4096
+    - keep_alive=0 unloads model from VRAM immediately after call
+      (trade: next call pays ~2s reload cost, but avoids exhaustion)
     """
     prompt = build_prompt(llm_input)
 
@@ -70,58 +84,63 @@ async def call_llm(llm_input: dict) -> dict:
         "model": OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
+        "keep_alive": 0,          # unload from VRAM after each call
         "options": {
             "temperature": LLM_TEMPERATURE,
             "num_predict": LLM_MAX_TOKENS,
+            "num_ctx": 2048,       # reduced from default 4096 — saves ~2GB VRAM
+            "num_gpu": 99,         # keep pipeline on GPU (all layers)
         },
         "format": "json",
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
-            response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
-                json=payload,
-            )
+    async with _pipeline_semaphore:              # only 1 concurrent pipeline call
+        log.debug("Pipeline LLM acquired semaphore — starting call")
+        try:
+            async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json=payload,
+                )
             response.raise_for_status()
 
-        result = response.json()
-        raw_text = result.get("response", "")
+            result = response.json()
+            raw_text = result.get("response", "")
 
-        # Parse JSON response
-        try:
-            parsed = json.loads(raw_text)
-        except json.JSONDecodeError:
-            start = raw_text.find("{")
-            end = raw_text.rfind("}") + 1
-            if start >= 0 and end > start:
-                parsed = json.loads(raw_text[start:end])
-            else:
-                log.error(f"Could not parse LLM response as JSON: {raw_text[:200]}")
-                parsed = _empty_response()
+            # Parse JSON response
+            try:
+                parsed = json.loads(raw_text)
+            except json.JSONDecodeError:
+                start = raw_text.find("{")
+                end = raw_text.rfind("}") + 1
+                if start >= 0 and end > start:
+                    parsed = json.loads(raw_text[start:end])
+                else:
+                    log.error(f"Could not parse LLM response as JSON: {raw_text[:200]}")
+                    parsed = _empty_response()
 
-        # Ensure all modules are present
-        for key in ["mimicry", "escalation", "fingerprint", "consensus", "narrative"]:
-            if key not in parsed:
-                parsed[key] = {"error": "Module output missing from LLM response"}
+            # Ensure all modules are present
+            for key in ["mimicry", "escalation", "fingerprint", "consensus", "narrative"]:
+                if key not in parsed:
+                    parsed[key] = {"error": "Module output missing from LLM response"}
 
-        parsed["_meta"] = {
-            "model": OLLAMA_MODEL,
-            "eval_duration_ms": result.get("eval_duration", 0) / 1_000_000,
-            "total_duration_ms": result.get("total_duration", 0) / 1_000_000,
-        }
+            parsed["_meta"] = {
+                "model": OLLAMA_MODEL,
+                "eval_duration_ms": result.get("eval_duration", 0) / 1_000_000,
+                "total_duration_ms": result.get("total_duration", 0) / 1_000_000,
+            }
 
-        return parsed
+            return parsed
 
-    except httpx.TimeoutException:
-        log.error("Pipeline LLM call timed out")
-        return _error_response("LLM call timed out")
-    except httpx.ConnectError:
-        log.error(f"Cannot connect to Ollama at {OLLAMA_BASE_URL}")
-        return _error_response(f"Cannot connect to Ollama at {OLLAMA_BASE_URL}")
-    except Exception as e:
-        log.error(f"Pipeline LLM call failed: {e}")
-        return _error_response(str(e))
+        except httpx.TimeoutException:
+            log.error("Pipeline LLM call timed out")
+            return _error_response("LLM call timed out")
+        except httpx.ConnectError:
+            log.error(f"Cannot connect to Ollama at {OLLAMA_BASE_URL}")
+            return _error_response(f"Cannot connect to Ollama at {OLLAMA_BASE_URL}")
+        except Exception as e:
+            log.error(f"Pipeline LLM call failed: {e}")
+            return _error_response(str(e))
 
 
 # ---------------------------------------------------------------------------
@@ -193,9 +212,12 @@ async def call_chatbot(
         "model": CHATBOT_MODEL,
         "prompt": full_prompt,
         "stream": False,
+        "keep_alive": 0,          # unload after call — don't sit in VRAM
         "options": {
             "temperature": CHATBOT_TEMPERATURE,
             "num_predict": CHATBOT_MAX_TOKENS,
+            "num_gpu": 0,          # force CPU — 3b is fast enough; keeps VRAM free for pipeline
+            "num_ctx": 2048,
         },
     }
 
@@ -266,9 +288,12 @@ async def stream_chatbot(
         "model": CHATBOT_MODEL,
         "prompt": full_prompt,
         "stream": True,
+        "keep_alive": 0,
         "options": {
             "temperature": CHATBOT_TEMPERATURE,
             "num_predict": CHATBOT_MAX_TOKENS,
+            "num_gpu": 0,          # CPU only — keeps VRAM free for pipeline
+            "num_ctx": 2048,
         },
     }
 

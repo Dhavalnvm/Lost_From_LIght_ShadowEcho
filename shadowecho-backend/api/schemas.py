@@ -53,6 +53,19 @@ class AlertAckRequest(BaseModel):
     alert_id: int
 
 
+class ChatRequest(BaseModel):
+    """Chatbot message from the analyst."""
+    message: str = Field(..., min_length=1, description="Analyst's message")
+    history: list[dict] = Field(
+        default=[],
+        description="Conversation history: [{role: 'user'|'assistant', content: '...'}]",
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Optional session ID for tracking conversations",
+    )
+
+
 # ---------------------------------------------------------------------------
 # RESPONSES
 # ---------------------------------------------------------------------------
@@ -133,3 +146,10 @@ class DashboardResponse(BaseModel):
 class FeedbackResponse(BaseModel):
     feedback_id: int
     message: str
+
+
+class ChatResponse(BaseModel):
+    response: str
+    model: str
+    context_used: bool
+    duration_ms: float = 0.0
