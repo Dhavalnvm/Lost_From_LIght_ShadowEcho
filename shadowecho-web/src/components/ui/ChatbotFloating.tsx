@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Bot, SendHorizonal, X } from 'lucide-react';
 import { sendChat } from '../../services/api';
 import type { ChatMessage } from '../../types/api';
 
-const QUICK_PROMPTS = [
-  'Summarize critical unacknowledged alerts',
-  'Any credential leak spikes today?',
+const quickPrompts = [
+  'Summarize critical alerts',
+  'Any credential leak spikes?',
   'What orgs are most mentioned?',
 ];
 
@@ -17,23 +18,23 @@ const ChatbotFloating: React.FC = () => {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, open, loading]);
+  }, [messages, loading, open]);
 
   const onSend = async (textInput?: string) => {
     const text = (textInput ?? input).trim();
     if (!text || loading) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: text };
-    const history = [...messages, userMsg];
+    const userMessage: ChatMessage = { role: 'user', content: text };
+    const history = [...messages, userMessage];
     setMessages(history);
     setInput('');
     setLoading(true);
 
     try {
-      const res = await sendChat(text, messages);
-      setMessages([...history, { role: 'assistant', content: res.response }]);
+      const response = await sendChat(text, messages);
+      setMessages([...history, { role: 'assistant', content: response.response }]);
     } catch (err) {
-      setMessages([...history, { role: 'assistant', content: `Error: ${err instanceof Error ? err.message : 'Request failed'}` }]);
+      setMessages([...history, { role: 'assistant', content: err instanceof Error ? err.message : 'Request failed' }]);
     } finally {
       setLoading(false);
     }
@@ -42,71 +43,76 @@ const ChatbotFloating: React.FC = () => {
   return (
     <>
       {open ? (
-        <div className="fixed right-5 bottom-20 z-50 w-[380px] h-[520px] border border-bg-border bg-bg-card flex flex-col shadow-[0_0_30px_rgba(0,200,240,0.15)]" style={{ borderRadius: 4 }}>
-          <div className="h-11 border-b border-bg-border px-3 flex items-center justify-between">
-            <div>
-              <p className="font-display text-sm text-text-primary">SHADOWECHO AI</p>
-              <p className="font-mono text-[9px] text-text-muted">llama3.2:3b</p>
+        <div className="fixed bottom-20 right-5 z-50 flex h-[520px] w-[380px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/40">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <Bot className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">ShadowEcho AI</p>
+                <p className="text-xs text-slate-500">Quick assistant</p>
+              </div>
             </div>
-            <button onClick={() => setOpen(false)} className="font-mono text-[11px] text-text-muted hover:text-text-primary">✕</button>
+            <button type="button" onClick={() => setOpen(false)} className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+
+          <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
             {messages.length === 0 ? (
               <div className="space-y-2">
-                {QUICK_PROMPTS.map(p => (
+                {quickPrompts.map((prompt) => (
                   <button
-                    key={p}
-                    onClick={() => onSend(p)}
-                    className="w-full text-left px-3 py-2 bg-bg-elevated border border-[#1e3d5e] shadow-[inset_0_-1px_0_rgba(0,0,0,.25)] hover:border-accent-cyan"
-                    style={{ borderRadius: 3 }}
+                    key={prompt}
+                    type="button"
+                    onClick={() => void onSend(prompt)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                   >
-                    <span className="font-mono text-[10px] text-text-secondary">{p}</span>
+                    {prompt}
                   </button>
                 ))}
               </div>
             ) : (
-              messages.map((m, idx) => (
-                <div key={`${m.role}-${idx}`} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[86%] px-3 py-2 text-[11px] font-mono leading-relaxed ${
-                      m.role === 'user'
-                        ? 'bg-[#0d1c30] border-r-2 border-accent-cyan text-text-primary'
-                        : 'bg-bg-elevated text-text-secondary'
-                    }`}
-                    style={{ borderRadius: 4 }}
-                  >
-                    {m.role === 'assistant' ? <span className="text-accent-cyan mr-1">◈</span> : null}
-                    <span className="whitespace-pre-wrap">{m.content}</span>
+              messages.map((message, index) => (
+                <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>
+                    {message.content}
                   </div>
                 </div>
               ))
             )}
-            {loading ? (
-              <div className="text-text-muted font-mono text-[11px] blink">···</div>
-            ) : null}
+            {loading ? <div className="text-sm text-slate-500">Thinking…</div> : null}
             <div ref={bottomRef} />
           </div>
-          <div className="border-t border-bg-border p-3 flex gap-2">
+
+          <div className="flex gap-3 border-t border-slate-200 p-4">
             <input
-              className="se-input !h-[38px] !py-0"
               value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && onSend()}
-              placeholder="Ask SHADOWECHO AI..."
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && !event.shiftKey && void onSend()}
+              placeholder="Ask ShadowEcho AI..."
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
             />
-            <button className="btn-c !px-3" onClick={() => onSend()} disabled={loading || !input.trim()}>
-              Send
+            <button
+              type="button"
+              onClick={() => void onSend()}
+              disabled={loading || !input.trim()}
+              className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <SendHorizonal className="h-4 w-4" />
             </button>
           </div>
         </div>
       ) : null}
+
       <button
-        onClick={() => setOpen(v => !v)}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
         aria-label="Open AI chatbot"
-        className="fixed right-5 bottom-5 z-50 w-[52px] h-[52px] bg-bg-elevated border border-accent-cyan text-accent-cyan text-xl flex items-center justify-center shadow-[0_0_18px_rgba(0,200,240,0.35)]"
-        style={{ borderWidth: 1.5, borderRadius: '999px' }}
+        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-600 shadow-lg shadow-slate-300/30 transition hover:bg-blue-50"
       >
-        ◈
+        <Bot className="h-6 w-6" />
       </button>
     </>
   );

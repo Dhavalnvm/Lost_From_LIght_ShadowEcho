@@ -1,7 +1,26 @@
 import React, { useState } from 'react';
+import { SearchCheck } from 'lucide-react';
 import { findSimilar } from '../../services/api';
 import type { LineupResponse } from '../../types/api';
-import { Card, SectionHeader, Spinner } from '../common';
+import { Button, Card, SectionHeader } from '../common';
+
+const similarityTone = (value: number) => {
+  if (value >= 0.9) return 'bg-red-50 text-red-700';
+  if (value >= 0.75) return 'bg-orange-50 text-orange-700';
+  if (value >= 0.6) return 'bg-amber-50 text-amber-700';
+  return 'bg-green-50 text-green-700';
+};
+
+const segmentedSimilarity = (value: number) => {
+  const filled = Math.round(Math.max(0, Math.min(1, value)) * 10);
+  return (
+    <div className="flex gap-1">
+      {Array.from({ length: 10 }, (_, index) => (
+        <span key={index} className={`h-2 w-4 rounded-sm ${index < filled ? 'bg-cyan-400' : 'bg-slate-200'}`} />
+      ))}
+    </div>
+  );
+};
 
 const LineupPanel: React.FC = () => {
   const [text, setText] = useState('');
@@ -13,76 +32,82 @@ const LineupPanel: React.FC = () => {
     if (!text.trim()) return;
     setLoading(true);
     setError(null);
+
     try {
-      const res = await findSimilar(text.trim());
-      setResult(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Search failed');
+      const response = await findSimilar(text.trim());
+      setResult(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Similarity search failed');
     } finally {
       setLoading(false);
     }
   };
 
-  const similarityColor = (s: number) => {
-    if (s >= 0.9) return 'text-accent-red';
-    if (s >= 0.75) return 'text-accent-amber';
-    if (s >= 0.6) return 'text-blue-400';
-    return 'text-text-muted';
-  };
-
   return (
-    <Card className="animate-slide-up">
-      <SectionHeader title="The Lineup" accent="11" subtitle="behavioral & linguistic similarity search" />
+    <Card className="h-full">
+      <SectionHeader
+        title="Behavioral Similarity Search"
+        subtitle="Compare text against semantically similar posts from the live vector index."
+        accent="Lineup"
+      />
 
-      <div className="space-y-2 mb-4">
+      <div className="space-y-4">
         <textarea
           value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder="Paste post text to find similar content across sources…"
-          className="w-full bg-bg-elevated border border-bg-border rounded-lg px-3 py-2.5 text-text-primary font-mono text-xs resize-none h-16 focus:outline-none focus:border-accent-cyan/40 placeholder:text-text-muted transition-colors"
+          onChange={(event) => setText(event.target.value)}
+          placeholder="Paste a suspicious post or message to search for similar activity..."
+          className="min-h-32 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
-        <button
-          onClick={handleSearch}
-          disabled={loading || !text.trim()}
-          className="w-full flex items-center justify-center gap-2 bg-accent-purple/10 border border-accent-purple/30 hover:bg-accent-purple/20 text-purple-300 font-mono text-xs py-2 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading ? <><Spinner size="sm" /> Searching…</> : '◈ Run Lineup'}
-        </button>
-      </div>
 
-      {error && <p className="text-accent-red font-mono text-xs mb-3">{error}</p>}
+        <Button variant="ghost" onClick={() => void handleSearch()} loading={loading} disabled={!text.trim()} className="w-full">
+          <SearchCheck className="h-4 w-4" />
+          Run Lineup
+        </Button>
 
-      {result && (
-        <div className="animate-fade-in space-y-2">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="font-mono text-[10px] text-text-muted">
-              {result.similar_posts.length} matches · {result.cluster_count} source clusters
-            </span>
-          </div>
-          <div className="space-y-2 max-h-72 overflow-y-auto">
+        {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+
+        {result ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                {result.similar_posts.length} matches
+              </span>
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                {result.cluster_count} clusters across {result.cluster_count} sources
+              </span>
+            </div>
+
             {result.similar_posts.length === 0 ? (
-              <p className="text-center text-text-muted font-mono text-sm py-6">No similar posts found</p>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                No similar posts found for this query.
+              </div>
             ) : (
-              result.similar_posts.map((post, i) => (
-                <div key={i} className="p-3 bg-bg-elevated rounded-lg border border-bg-border hover:border-accent-purple/20 transition-all">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-bg-base border border-bg-border rounded font-mono text-[9px] text-text-muted">{post.source}</span>
-                      {post.has_credentials && <span className="px-1.5 py-0.5 bg-accent-amber/10 border border-accent-amber/20 rounded font-mono text-[9px] text-accent-amber">CREDS</span>}
-                      {post.has_ioc && <span className="px-1.5 py-0.5 bg-accent-red/10 border border-accent-red/20 rounded font-mono text-[9px] text-accent-red">IOC</span>}
+              <div className="space-y-3">
+                {result.similar_posts.map((post, index) => (
+                  <div key={`${post.source}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{post.source}</span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${similarityTone(post.similarity)}`}>
+                        {(post.similarity * 100).toFixed(0)}%
+                      </span>
+                      {post.has_credentials ? <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">🔑 Credentials</span> : null}
+                      {post.has_ioc ? <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">⚠ IOC</span> : null}
+                      <span className="text-xs text-slate-500">👤 {post.author || 'unknown'}</span>
+                      <span className="text-xs text-slate-500">{new Date(post.timestamp).toLocaleString()}</span>
                     </div>
-                    <span className={`font-mono text-xs font-bold ${similarityColor(post.similarity)}`}>
-                      {(post.similarity * 100).toFixed(0)}%
-                    </span>
+                    <div className="mt-3">
+                      <p className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">Similarity</p>
+                      {segmentedSimilarity(post.similarity)}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-700">{post.text}</p>
+                    <p className="mt-3 text-xs italic leading-5 text-slate-500">{post.confidence_note}</p>
                   </div>
-                  <p className="text-text-secondary font-mono text-[11px] leading-relaxed line-clamp-2 mb-1.5">{post.text}</p>
-                  <p className="text-text-muted font-mono text-[9px] italic">{post.confidence_note}</p>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
-        </div>
-      )}
+        ) : null}
+      </div>
     </Card>
   );
 };

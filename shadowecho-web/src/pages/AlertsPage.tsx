@@ -1,467 +1,237 @@
-// src/pages/AlertsPage.tsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { fetchAlerts, fetchAlertSummary, acknowledgeAlert } from '../services/api';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { BellRing } from 'lucide-react';
+import { acknowledgeAlert, fetchAlerts, fetchAlertSummary } from '../services/api';
 import type { Alert, AlertSummary } from '../types/api';
+import { FALLBACK_ALERTS, FALLBACK_ALERT_SUMMARY } from '../data/fallbackData';
 import { ErrorBanner, LiveIndicator, Spinner } from '../components/common';
+import PageHeader from '../components/layout/PageHeader';
 
-const SEVERITIES = ['all', 'critical', 'high', 'medium', 'low'] as const;
-type SevFilter = (typeof SEVERITIES)[number];
+const severities = ['all', 'critical', 'high', 'medium', 'low'] as const;
+type SeverityFilter = (typeof severities)[number];
 
-/* ── Confidence bar (sparkline-style) ─────────────────────────────── */
-const ConfBar: React.FC<{ value: number }> = ({ value }) => {
-  const pct = Math.round(value * 100);
-  const color =
-    pct >= 80 ? '#ff2244' :
-    pct >= 60 ? '#ff6600' :
-    pct >= 40 ? '#ffcc00' : '#00cc66';
-  return (
-    <div className="flex items-center gap-2 min-w-[100px]">
-      <div className="flex-1 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <span
-        className="text-xs font-bold tabular-nums"
-        style={{ fontFamily: "'Orbitron',monospace", color, minWidth: 36, textAlign: 'right' }}
-      >
-        {pct}%
-      </span>
-    </div>
-  );
+const pillTone: Record<string, string> = {
+  critical: 'bg-red-50 text-red-700',
+  high: 'bg-orange-50 text-orange-700',
+  medium: 'bg-amber-50 text-amber-700',
+  low: 'bg-green-50 text-green-700',
 };
 
-/* ── Severity key-indicator card (Splunk style) ──────────────────── */
-interface SevCardProps {
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}
-
-const SEV_META = {
-  critical: { color: '#ff2244', bg: 'rgba(255,34,68,0.08)',  border: 'rgba(255,34,68,0.35)',  label: 'CRITICAL' },
-  high:     { color: '#ff6600', bg: 'rgba(255,102,0,0.08)', border: 'rgba(255,102,0,0.35)', label: 'HIGH' },
-  medium:   { color: '#ffcc00', bg: 'rgba(255,204,0,0.06)', border: 'rgba(255,204,0,0.3)',  label: 'MEDIUM' },
-  low:      { color: '#00cc66', bg: 'rgba(0,204,102,0.06)', border: 'rgba(0,204,102,0.3)',  label: 'LOW' },
+const statusTone: Record<string, string> = {
+  investigating: 'border-amber-200 bg-amber-50 text-amber-700',
+  resolved: 'border-green-200 bg-green-50 text-green-700',
+  new: 'border-blue-200 bg-blue-50 text-blue-700',
 };
 
-const SevCard: React.FC<SevCardProps> = ({ severity, count, active, onClick }) => {
-  const m = SEV_META[severity];
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background: active ? m.bg : 'rgba(255,255,255,0.02)',
-        border: `1px solid ${active ? m.border : 'rgba(255,255,255,0.06)'}`,
-        boxShadow: active ? `0 0 20px ${m.color}22` : 'none',
-        padding: '18px 16px',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        textAlign: 'left',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Bottom accent bar */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, height: 2,
-        background: active ? `linear-gradient(90deg,transparent,${m.color},transparent)` : 'transparent',
-        transition: 'all 0.2s',
-      }} />
-      <div
-        style={{
-          fontFamily: "'Orbitron',monospace",
-          fontSize: 40,
-          fontWeight: 900,
-          color: active ? m.color : 'rgba(255,255,255,0.5)',
-          lineHeight: 1,
-          letterSpacing: '-1px',
-          transition: 'color 0.2s',
-        }}
-      >
-        {count}
-      </div>
-      <div style={{
-        fontFamily: "'Share Tech Mono',monospace",
-        fontSize: 9,
-        letterSpacing: '0.25em',
-        color: active ? m.color : 'rgba(255,255,255,0.3)',
-        marginTop: 6,
-        transition: 'color 0.2s',
-      }}>
-        {m.label}
-      </div>
-      {active && count > 0 && (
-        <div style={{
-          position: 'absolute', top: 12, right: 12,
-          width: 7, height: 7, borderRadius: '50%',
-          background: m.color, boxShadow: `0 0 8px ${m.color}`,
-          animation: 'pulse 1.5s ease-in-out infinite',
-        }} />
-      )}
-    </button>
-  );
+const inferStatus = (alert: Alert) => {
+  if (alert.acknowledged) return 'resolved';
+  if ((alert.confidence ?? 0) >= 0.8) return 'investigating';
+  return 'new';
 };
 
-/* ── Alert row ───────────────────────────────────────────────────── */
-interface AlertRowProps {
-  alert: Alert;
-  acking: boolean;
-  onAck: () => void;
-}
-
-const AlertRow: React.FC<AlertRowProps> = ({ alert, acking, onAck }) => {
-  const m = SEV_META[alert.severity as keyof typeof SEV_META] ?? SEV_META.low;
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '90px 1fr 140px 110px',
-        gap: 16,
-        alignItems: 'center',
-        padding: '13px 20px',
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
-        borderLeft: alert.acknowledged ? '3px solid transparent' : `3px solid ${m.color}`,
-        background: alert.acknowledged
-          ? 'transparent'
-          : `linear-gradient(90deg, ${m.color}08 0%, transparent 30%)`,
-        transition: 'all 0.15s',
-        opacity: alert.acknowledged ? 0.45 : 1,
-      }}
-    >
-      {/* Severity */}
-      <div>
-        <span style={{
-          display: 'inline-block',
-          fontSize: 9,
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          padding: '3px 8px',
-          border: `1px solid ${m.border}`,
-          background: m.bg,
-          color: m.color,
-          fontFamily: "'Share Tech Mono',monospace",
-          fontWeight: 700,
-        }}>
-          {alert.severity?.toUpperCase()}
-        </span>
-      </div>
-
-      {/* Title + meta */}
-      <div style={{ minWidth: 0 }}>
-        <div style={{
-          fontFamily: "'Share Tech Mono',monospace",
-          fontSize: 13,
-          color: 'rgba(200,223,240,0.95)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          marginBottom: 3,
-        }}>
-          {alert.title || 'Untitled Alert'}
-        </div>
-        <div style={{
-          fontFamily: "'Share Tech Mono',monospace",
-          fontSize: 10,
-          color: 'rgba(90,138,176,0.7)',
-          letterSpacing: '0.05em',
-        }}>
-          {alert.alert_type && <span style={{ marginRight: 10 }}>{alert.alert_type}</span>}
-          {alert.post_id && <span>post: {alert.post_id.slice(0, 10)}…</span>}
-          {alert.created_at && (
-            <span style={{ marginLeft: 10, color: 'rgba(90,138,176,0.5)' }}>
-              {alert.created_at.slice(0, 16).replace('T', ' ')}
-            </span>
-          )}
-        </div>
-        {alert.summary && (
-          <div style={{
-            fontFamily: "'Share Tech Mono',monospace",
-            fontSize: 10,
-            color: 'rgba(90,138,176,0.6)',
-            marginTop: 3,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
-            {alert.summary.slice(0, 120)}{alert.summary.length > 120 ? '…' : ''}
-          </div>
-        )}
-      </div>
-
-      {/* Confidence */}
-      <ConfBar value={alert.confidence ?? 0} />
-
-      {/* Action */}
-      {alert.acknowledged ? (
-        <span style={{
-          fontFamily: "'Share Tech Mono',monospace",
-          fontSize: 10,
-          color: '#00cc66',
-          opacity: 0.6,
-          letterSpacing: '0.1em',
-        }}>
-          ✓ ACKNOWLEDGED
-        </span>
-      ) : (
-        <button
-          onClick={onAck}
-          disabled={acking}
-          style={{
-            background: 'rgba(0,212,255,0.07)',
-            border: '1px solid rgba(0,212,255,0.3)',
-            color: '#00d4ff',
-            fontFamily: "'Share Tech Mono',monospace",
-            fontSize: 9,
-            letterSpacing: '0.15em',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-            opacity: acking ? 0.4 : 1,
-            textTransform: 'uppercase',
-          }}
-        >
-          {acking ? '…' : '✓ ACK'}
-        </button>
-      )}
-    </div>
-  );
-};
-
-/* ── Page ────────────────────────────────────────────────────────── */
 const AlertsPage: React.FC = () => {
-  const [alerts, setAlerts]       = useState<Alert[]>([]);
-  const [summary, setSummary]     = useState<AlertSummary | null>(null);
-  const [filter, setFilter]       = useState<SevFilter>('all');
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [summary, setSummary] = useState<AlertSummary | null>(null);
+  const [filter, setFilter] = useState<SeverityFilter>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [acking, setAcking]       = useState<Set<number | string>>(new Set());
+  const [acking, setAcking] = useState<Set<number | string>>(new Set());
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [al, sum] = await Promise.all([
+      const [alertsResponse, alertSummary] = await Promise.all([
         fetchAlerts(100, filter === 'all' ? undefined : filter),
         fetchAlertSummary(),
       ]);
-      setAlerts(al.alerts);
-      setSummary(sum);
+
+      const nextAlerts = alertsResponse.alerts.length > 0 ? alertsResponse.alerts : FALLBACK_ALERTS;
+      const nextSummary = alertSummary.total > 0 ? alertSummary : FALLBACK_ALERT_SUMMARY;
+
+      setAlerts(nextAlerts);
+      setSummary(nextSummary);
+      setIsDemoMode(alertsResponse.alerts.length === 0 || alertSummary.total === 0);
       setLastUpdated(new Date());
       setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load alerts');
+    } catch (err) {
+      setAlerts(FALLBACK_ALERTS);
+      setSummary(FALLBACK_ALERT_SUMMARY);
+      setIsDemoMode(true);
+      setError(err instanceof Error ? err.message : 'Failed to load alerts');
     } finally {
       setLoading(false);
     }
   }, [filter]);
 
-  useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const id = setInterval(load, 8000);
-    return () => clearInterval(id);
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => void load(), 8000);
+    return () => window.clearInterval(interval);
   }, [load]);
 
   const handleAck = async (id: number | string) => {
-    setAcking(p => new Set(p).add(id));
-    try { await acknowledgeAlert(id); await load(); }
-    catch { /* no-op */ }
-    finally { setAcking(p => { const n = new Set(p); n.delete(id); return n; }); }
+    setAcking((current) => new Set(current).add(id));
+    try {
+      await acknowledgeAlert(id);
+      await load();
+    } finally {
+      setAcking((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
-  const unacked = alerts.filter(a => !a.acknowledged).length;
+  const unacknowledgedCount = useMemo(() => alerts.filter((alert) => !alert.acknowledged).length, [alerts]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, animation: 'fadeUp 0.3s ease' }}>
-
-      {/* ── Page header ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div>
-            <h1 style={{
-              fontFamily: "'Orbitron',monospace",
-              fontSize: 26,
-              fontWeight: 700,
-              color: '#c8dff0',
-              letterSpacing: '0.1em',
-              lineHeight: 1,
-            }}>
-              ALERT FEED
-            </h1>
-            <p style={{
-              fontFamily: "'Share Tech Mono',monospace",
-              fontSize: 11,
-              color: 'rgba(90,138,176,0.7)',
-              letterSpacing: '0.15em',
-              marginTop: 4,
-              textTransform: 'uppercase',
-            }}>
-              All detected threats · {unacked} unacknowledged
-            </p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Alert Feed"
+        subtitle="Live alert operations table with severity filtering, acknowledgements, and current backend counts."
+        action={
+          <div className="flex items-center gap-3">
+            {loading ? <Spinner size="sm" /> : null}
+            <LiveIndicator updatedAt={lastUpdated} />
           </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {loading && <Spinner />}
-          <LiveIndicator updatedAt={lastUpdated} />
-        </div>
-      </div>
+        }
+      />
 
-      {error && <ErrorBanner message={error} />}
+      {error ? <ErrorBanner message={error} /> : null}
 
-      {/* ── Key indicators (Splunk style) ────────────────────── */}
-      {summary && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-          {(['critical', 'high', 'medium', 'low'] as const).map(sev => (
-            <SevCard
-              key={sev}
-              severity={sev}
-              count={summary[sev] ?? 0}
-              active={filter === sev}
-              onClick={() => setFilter(filter === sev ? 'all' : sev)}
-            />
-          ))}
+      {isDemoMode ? (
+        <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-violet-700">
+          Demo mode - showing representative alerts while the live database is still sparse.
         </div>
-      )}
+      ) : null}
 
-      {/* ── Filter bar ───────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{
-          fontFamily: "'Share Tech Mono',monospace",
-          fontSize: 9,
-          color: 'rgba(90,138,176,0.5)',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          marginRight: 4,
-        }}>
-          FILTER:
-        </span>
-        {SEVERITIES.map(s => {
-          const m = s !== 'all' ? SEV_META[s] : null;
-          const active = filter === s;
-          return (
+      {summary ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {(['critical', 'high', 'medium', 'low'] as const).map((severity) => (
             <button
-              key={s}
-              onClick={() => setFilter(s)}
-              style={{
-                padding: '6px 14px',
-                fontFamily: "'Share Tech Mono',monospace",
-                fontSize: 10,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase',
-                background: active ? (m ? m.bg : 'rgba(0,212,255,0.1)') : 'transparent',
-                border: `1px solid ${active ? (m ? m.border : 'rgba(0,212,255,0.4)') : 'rgba(255,255,255,0.07)'}`,
-                color: active ? (m ? m.color : '#00d4ff') : 'rgba(90,138,176,0.6)',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
+              key={severity}
+              type="button"
+              onClick={() => setFilter(filter === severity ? 'all' : severity)}
+              className={`rounded-2xl border p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                filter === severity ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white'
+              }`}
             >
-              {s}
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-400">{severity}</div>
+              <div className="mt-3 text-3xl font-semibold text-slate-900">{summary[severity]}</div>
+              <div className="mt-2 text-sm text-slate-500">Click to filter by {severity}</div>
             </button>
-          );
-        })}
-        <div style={{ marginLeft: 'auto' }}>
-          <button
-            onClick={load}
-            style={{
-              padding: '6px 14px',
-              fontFamily: "'Share Tech Mono',monospace",
-              fontSize: 10,
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              background: 'transparent',
-              border: '1px solid rgba(0,212,255,0.2)',
-              color: '#00d4ff',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            ↺ REFRESH
-          </button>
-        </div>
-      </div>
-
-      {/* ── Table header ─────────────────────────────────────── */}
-      <div style={{
-        border: '1px solid rgba(14,32,53,1)',
-        background: 'rgba(7,16,28,0.9)',
-        overflow: 'hidden',
-      }}>
-        {/* Column headers */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '90px 1fr 140px 110px',
-          gap: 16,
-          padding: '8px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          background: 'rgba(0,212,255,0.03)',
-        }}>
-          {['SEVERITY', 'TITLE / DETAILS', 'CONFIDENCE', 'ACTION'].map(h => (
-            <span key={h} style={{
-              fontFamily: "'Share Tech Mono',monospace",
-              fontSize: 9,
-              letterSpacing: '0.2em',
-              color: 'rgba(90,138,176,0.5)',
-              textTransform: 'uppercase',
-            }}>
-              {h}
-            </span>
           ))}
         </div>
+      ) : null}
 
-        {/* Rows */}
+      <div className="flex flex-wrap items-center gap-2">
+        {severities.map((severity) => (
+          <button
+            key={severity}
+            type="button"
+            onClick={() => setFilter(severity)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              filter === severity
+                ? 'bg-blue-600 text-white'
+                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {severity}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="ml-auto inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+        >
+          <BellRing className="h-4 w-4" />
+          Refresh
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="grid grid-cols-[130px_140px_140px_1fr_140px] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <span>Time</span>
+          <span>Severity</span>
+          <span>Type</span>
+          <span>Title / Details</span>
+          <span>Action</span>
+        </div>
+
         {loading && alerts.length === 0 ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+          <div className="flex justify-center px-6 py-12">
             <Spinner />
           </div>
         ) : alerts.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: 48,
-            fontFamily: "'Share Tech Mono',monospace",
-            fontSize: 13,
-            color: 'rgba(90,138,176,0.4)',
-            letterSpacing: '0.1em',
-          }}>
-            No alerts for this filter
-          </div>
+          <div className="px-6 py-12 text-center text-sm text-slate-500">No alerts available for this filter.</div>
         ) : (
-          alerts.map(alert => (
-            <AlertRow
-              key={alert.id}
-              alert={alert}
-              acking={acking.has(alert.id)}
-              onAck={() => handleAck(alert.id)}
-            />
-          ))
+          alerts.map((alert) => {
+            const status = inferStatus(alert);
+            return (
+              <div key={String(alert.id)} className={`grid grid-cols-[130px_140px_140px_1fr_140px] gap-4 border-b border-slate-100 px-6 py-4 transition last:border-b-0 ${alert.acknowledged ? 'bg-slate-50 opacity-80' : 'hover:bg-slate-50'}`}>
+                <div className="text-sm text-slate-600">
+                  {alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Unavailable'}
+                </div>
+                <div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone[alert.severity] ?? pillTone.low}`}>
+                    {alert.severity}
+                  </span>
+                </div>
+                <div className="text-sm capitalize text-slate-600">{alert.alert_type || 'threat'}</div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">{alert.title || 'Untitled alert'}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    {alert.summary || 'No summary provided.'}
+                  </p>
+                  <p className="mt-2 text-xs italic text-slate-500">{alert.uncertainty_note}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                      Post ID {String(alert.post_id).slice(0, 8)}
+                    </span>
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[status]}`}>
+                      {status}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                      Confidence {((alert.confidence ?? 0) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="mt-3 flex gap-1">
+                    {Array.from({ length: 8 }, (_, index) => (
+                      <span key={index} className={`h-2 w-4 rounded-sm ${index < Math.round((alert.confidence ?? 0) * 8) ? 'bg-cyan-400' : 'bg-slate-200'}`} />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-start justify-end">
+                  {alert.acknowledged ? (
+                    <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">✓ Acknowledged</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleAck(alert.id)}
+                      disabled={acking.has(alert.id)}
+                      className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {acking.has(alert.id) ? 'Acknowledging…' : 'Acknowledge'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
-      {/* ── Footer stat bar ──────────────────────────────────── */}
-      <div style={{
-        display: 'flex',
-        gap: 24,
-        padding: '10px 16px',
-        border: '1px solid rgba(14,32,53,1)',
-        background: 'rgba(7,16,28,0.6)',
-        fontFamily: "'Share Tech Mono',monospace",
-        fontSize: 10,
-        color: 'rgba(90,138,176,0.5)',
-        letterSpacing: '0.1em',
-      }}>
-        <span>TOTAL: <span style={{ color: '#00d4ff' }}>{alerts.length}</span></span>
-        <span>UNACKED: <span style={{ color: '#ff2244' }}>{unacked}</span></span>
-        {summary && <>
-          <span>CRITICAL: <span style={{ color: '#ff2244' }}>{summary.critical ?? 0}</span></span>
-          <span>HIGH: <span style={{ color: '#ff6600' }}>{summary.high ?? 0}</span></span>
-          <span>MEDIUM: <span style={{ color: '#ffcc00' }}>{summary.medium ?? 0}</span></span>
-          <span>LOW: <span style={{ color: '#00cc66' }}>{summary.low ?? 0}</span></span>
-        </>}
-        {lastUpdated && (
-          <span style={{ marginLeft: 'auto' }}>
-            UPDATED {lastUpdated.toLocaleTimeString('en-US', { hour12: false })}
-          </span>
-        )}
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+        <span>Total: <span className="font-semibold text-slate-900">{alerts.length}</span></span>
+        <span>Unacknowledged: <span className="font-semibold text-slate-900">{unacknowledgedCount}</span></span>
+        {summary ? <span>Critical: <span className="font-semibold text-slate-900">{summary.critical}</span></span> : null}
+        {summary ? <span>High: <span className="font-semibold text-slate-900">{summary.high}</span></span> : null}
+        {summary ? <span>Medium: <span className="font-semibold text-slate-900">{summary.medium}</span></span> : null}
+        {summary ? <span>Low: <span className="font-semibold text-slate-900">{summary.low}</span></span> : null}
       </div>
     </div>
   );

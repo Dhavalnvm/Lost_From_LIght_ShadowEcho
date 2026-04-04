@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Card, SectionHeader, Spinner, ErrorBanner } from '../components/common';
-import { exportReport, generateReport } from '../services/api';
-import type { ReportRequest, ReportResponse, ReportExportResponse } from '../types/api';
+import { Button, Card, ErrorBanner, SectionHeader, Spinner } from '../components/common';
 import PageHeader from '../components/layout/PageHeader';
+import { exportReport, generateReport } from '../services/api';
+import type { ReportExportResponse, ReportRequest, ReportResponse } from '../types/api';
 
 const ReportView: React.FC = () => {
   const [payload, setPayload] = useState<ReportRequest>({
@@ -44,112 +44,140 @@ const ReportView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <PageHeader title="Report Generator" subtitle="Generate executive reports from live ShadowEcho data." />
+    <div className="space-y-6">
+      <PageHeader
+        title="Report Generator"
+        subtitle="Generate executive-ready threat reports from the live ShadowEcho backend."
+      />
+
       {error ? <ErrorBanner message={error} /> : null}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-        <Card className="xl:col-span-1">
-          <SectionHeader title="Configuration" subtitle="Report input settings" />
-          <div className="space-y-3">
-            <div>
-              <label className="font-mono text-[10px] text-text-muted block mb-1">Organization</label>
+      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card>
+          <SectionHeader title="Configuration" subtitle="Set the report inputs and export options." accent="Input" />
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Organization</label>
               <input
-                className="se-input"
                 value={payload.org_name ?? ''}
-                onChange={e => setPayload(p => ({ ...p, org_name: e.target.value }))}
+                onChange={(event) => setPayload((current) => ({ ...current, org_name: event.target.value }))}
                 placeholder="Acme Corp"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               />
             </div>
-            <div>
-              <label className="font-mono text-[10px] text-text-muted block mb-1">Timeframe</label>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Timeframe</label>
               <select
-                className="se-sel"
                 value={payload.timeframe ?? '7d'}
-                onChange={e => setPayload(p => ({ ...p, timeframe: e.target.value }))}
+                onChange={(event) => setPayload((current) => ({ ...current, timeframe: event.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               >
                 <option value="24h">Last 24 hours</option>
                 <option value="7d">Last 7 days</option>
                 <option value="30d">Last 30 days</option>
               </select>
             </div>
-            <div>
-              <label className="font-mono text-[10px] text-text-muted block mb-1">Focus</label>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Focus</label>
               <textarea
-                className="se-ta"
                 value={payload.focus ?? ''}
-                onChange={e => setPayload(p => ({ ...p, focus: e.target.value }))}
+                onChange={(event) => setPayload((current) => ({ ...current, focus: event.target.value }))}
                 placeholder="Credential theft, extortion mentions, actor clusters..."
+                className="min-h-32 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               />
             </div>
-            <label className="flex items-center gap-2 font-mono text-[10px] text-text-secondary">
+
+            <label className="flex items-center gap-3 text-sm text-slate-600">
               <input
                 type="checkbox"
                 checked={Boolean(payload.include_recommendations)}
-                onChange={e => setPayload(p => ({ ...p, include_recommendations: e.target.checked }))}
+                onChange={(event) => setPayload((current) => ({ ...current, include_recommendations: event.target.checked }))}
               />
               Include recommendations
             </label>
-            <div className="flex gap-2">
-              <button className="btn-c" onClick={onGenerate} disabled={loading}>
-                {loading ? 'Generating...' : 'Generate'}
-              </button>
-              <button className="btn-g" onClick={onExport} disabled={exporting}>
-                {exporting ? 'Exporting...' : 'Export'}
-              </button>
+
+            <div className="flex gap-3">
+              <Button onClick={() => void onGenerate()} loading={loading}>Generate</Button>
+              <Button variant="ghost" onClick={() => void onExport()} loading={exporting}>Export</Button>
             </div>
           </div>
         </Card>
 
-        <Card className="xl:col-span-2">
-          <SectionHeader title="Report Output" subtitle="Live backend response" />
+        <Card>
+          <SectionHeader title="Report Output" subtitle="Rendered directly from the report API response." accent="Live" />
           {loading ? (
-            <div className="py-8 flex justify-center"><Spinner /></div>
+            <div className="flex justify-center py-10">
+              <Spinner />
+            </div>
           ) : report ? (
-            <div className="space-y-3">
-              <div className="border-l-[3px] border-accent-cyan pl-3">
-                <p className="font-display text-lg text-text-primary">{String(report.title ?? 'Executive Threat Report')}</p>
-                <p className="font-mono text-[10px] text-text-muted">{String(report.generated_at ?? new Date().toISOString())}</p>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-lg font-semibold text-slate-900">{String(report.org_focus ?? 'Executive Threat Report')}</p>
+                <p className="mt-1 text-sm text-slate-500">{String(report.generated_at ?? new Date().toISOString())}</p>
               </div>
+
               {report.executive_summary ? (
-                <div className="border-l-[3px] border-accent-amber pl-3">
-                  <p className="font-sans text-[11px] text-text-secondary leading-relaxed">{String(report.executive_summary)}</p>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+                  {String(report.executive_summary)}
                 </div>
               ) : null}
-              {Array.isArray(report.key_findings) ? (
+
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Signal Posts</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{report.overview.signal_posts}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Total Alerts</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{report.overview.total_alerts}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Credential Posts</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{report.overview.credential_posts}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">IOC Posts</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{report.overview.ioc_posts}</p>
+                </div>
+              </div>
+
+              {report.recommendations ? (
                 <div>
-                  <p className="font-mono text-[10px] text-text-muted mb-1">KEY FINDINGS</p>
-                  <ul className="space-y-1">
-                    {report.key_findings.map((item, idx) => (
-                      <li key={`${item}-${idx}`} className="font-sans text-[11px] text-text-secondary">- {item}</li>
-                    ))}
-                  </ul>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Recommendations</p>
+                  <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm whitespace-pre-wrap text-green-900">
+                    {report.recommendations}
+                  </div>
                 </div>
               ) : null}
-              {Array.isArray(report.recommendations) ? (
-                <div className="border-l-[3px] border-accent-green pl-3">
-                  <p className="font-mono text-[10px] text-text-muted mb-1">RECOMMENDATIONS</p>
-                  <ul className="space-y-1">
-                    {report.recommendations.map((item, idx) => (
-                      <li key={`${item}-${idx}`} className="font-sans text-[11px] text-text-secondary">- {item}</li>
-                    ))}
-                  </ul>
+
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Critical Alerts</p>
+                <div className="space-y-2">
+                  {report.critical_alerts.slice(0, 3).map((alert) => (
+                    <div key={alert.id} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                      <p className="font-semibold text-slate-900">{alert.title}</p>
+                      <p className="mt-1">{alert.summary}</p>
+                    </div>
+                  ))}
                 </div>
-              ) : null}
-              <pre className="bg-bg-elevated border border-bg-border p-3 overflow-auto text-[10px] font-mono text-text-secondary max-h-[220px]">
+              </div>
+
+              <pre className="max-h-[240px] overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
                 {JSON.stringify(report, null, 2)}
               </pre>
             </div>
           ) : (
-            <p className="font-mono text-xs text-text-muted">Run generation to view report output.</p>
+            <p className="text-sm text-slate-500">Run generation to view report output.</p>
           )}
         </Card>
       </div>
 
       {exportMeta ? (
         <Card>
-          <SectionHeader title="Export Result" subtitle="Response from /api/report/export" />
-          <pre className="bg-bg-elevated border border-bg-border p-3 overflow-auto text-[10px] font-mono text-text-secondary max-h-[180px]">
+          <SectionHeader title="Export Result" subtitle="Response from `/api/report/export`" accent="File" />
+          <pre className="max-h-[220px] overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
             {JSON.stringify(exportMeta, null, 2)}
           </pre>
         </Card>

@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
+import { Languages, SearchCode } from 'lucide-react';
 import { decodeText } from '../../services/api';
 import type { DecodeResponse } from '../../types/api';
-import { Card, SectionHeader, SeverityBadge, Spinner } from '../common';
-
-const SEVERITY_COLOR: Record<string, string> = {
-  critical: 'text-accent-red',
-  high: 'text-accent-amber',
-  medium: 'text-blue-400',
-  low: 'text-text-muted',
-};
+import { Button, Card, SectionHeader, SeverityBadge } from '../common';
 
 const DecoderPanel: React.FC = () => {
   const [input, setInput] = useState('');
@@ -20,72 +14,85 @@ const DecoderPanel: React.FC = () => {
     if (!input.trim()) return;
     setLoading(true);
     setError(null);
+
     try {
-      const res = await decodeText(input.trim());
-      setResult(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Decode failed');
+      const response = await decodeText(input.trim());
+      setResult(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Decode failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Card className="animate-slide-up">
-      <SectionHeader title="Slang Decoder" accent="06" subtitle="dark web coded language analysis" />
+    <Card className="h-full">
+      <SectionHeader
+        title="Slang Decoder"
+        subtitle="Submit dark-web text and decode it against the live backend dictionary."
+        accent="Decode"
+      />
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <textarea
           value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Paste dark web text here… e.g. 'selling fresh logs from redline stealer, fullz available'"
-          className="w-full bg-bg-elevated border border-bg-border rounded-lg px-3 py-2.5 text-text-primary font-mono text-xs resize-none h-20 focus:outline-none focus:border-accent-cyan/40 placeholder:text-text-muted transition-colors"
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="Paste suspicious text or coded marketplace language..."
+          className="min-h-36 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
-        <button
-          onClick={handleDecode}
-          disabled={loading || !input.trim()}
-          className="w-full flex items-center justify-center gap-2 bg-accent-cyan/10 border border-accent-cyan/30 hover:bg-accent-cyan/20 hover:border-accent-cyan/50 text-accent-cyan font-mono text-xs py-2 rounded-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading ? <><Spinner size="sm" /> Decoding…</> : '◈ Decode Text'}
-        </button>
-      </div>
 
-      {error && <p className="text-accent-red font-mono text-xs mt-3">{error}</p>}
+        <Button onClick={() => void handleDecode()} loading={loading} disabled={!input.trim()} className="w-full">
+          <SearchCode className="h-4 w-4" />
+          Decode Text
+        </Button>
 
-      {result && (
-        <div className="mt-4 space-y-3 animate-fade-in">
-          <div className="flex items-center gap-3 flex-wrap">
-            <SeverityBadge severity={result.highest_severity} />
-            <span className="font-mono text-[10px] text-text-muted">{result.term_count} terms decoded</span>
-            <div className="flex gap-1 flex-wrap">
-              {result.language_mix.map(l => (
-                <span key={l} className="px-2 py-0.5 bg-bg-elevated border border-bg-border rounded font-mono text-[9px] text-text-secondary">{l}</span>
-              ))}
-            </div>
-          </div>
+        {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-          {result.decoded_summary && (
-            <div className="bg-bg-elevated border border-bg-border rounded-lg p-3">
-              <p className="text-text-secondary font-mono text-[11px] leading-relaxed">{result.decoded_summary}</p>
-            </div>
-          )}
-
-          {result.decoded_terms.length > 0 && (
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {result.decoded_terms.map((term, i) => (
-                <div key={i} className="flex items-start gap-3 p-2 bg-bg-elevated rounded border border-bg-border">
-                  <span className={`font-mono text-[10px] font-semibold min-w-0 ${SEVERITY_COLOR[term.severity] ?? 'text-text-muted'}`}>
-                    {term.term}
+        {result ? (
+          <div className="space-y-4">
+            <div className={`rounded-2xl border px-4 py-3 ${result.highest_severity === 'critical' ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <SeverityBadge severity={result.highest_severity} />
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  {result.term_count} terms decoded
+                </span>
+                {result.language_mix.map((language) => (
+                  <span key={language} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                    <Languages className="h-3.5 w-3.5" />
+                    {language}
                   </span>
-                  <span className="text-text-muted font-mono text-[10px]">→</span>
-                  <span className="text-text-secondary font-mono text-[10px] flex-1">{term.decoded}</span>
-                  <span className="text-text-muted font-mono text-[9px] shrink-0 uppercase">{term.category}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {result.decoded_terms.map((term, index) => (
+                <div key={`${term.original}-${index}`} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[140px_1fr_auto_auto] md:items-start">
+                  <div>
+                    <p className="rounded-md bg-violet-50 px-2 py-1 text-sm font-semibold text-violet-700">{term.original}</p>
+                    <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">{term.language}</p>
+                  </div>
+                  <p className="text-sm leading-6 text-slate-600">{term.decoded}</p>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{term.category}</span>
+                  <SeverityBadge severity={term.severity} />
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Decoded Summary</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{result.decoded_summary}</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <SeverityBadge severity={result.highest_severity} />
+              {result.threat_categories.map((category) => (
+                <span key={category} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{category}</span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </Card>
   );
 };

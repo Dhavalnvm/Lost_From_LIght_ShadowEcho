@@ -1,14 +1,30 @@
 import React, { useState } from 'react';
+import { DollarSign, Landmark, Scale, ShieldAlert } from 'lucide-react';
 import { quickImpact } from '../../services/api';
 import type { ImpactQuickResponse } from '../../types/api';
-import { Card, SectionHeader, Spinner } from '../common';
+import { Button, Card, SectionHeader } from '../common';
 
-const SEVERITY_COLORS: Record<string, { bar: string; text: string }> = {
-  critical: { bar: 'bg-accent-red', text: 'text-accent-red' },
-  high: { bar: 'bg-accent-amber', text: 'text-accent-amber' },
-  medium: { bar: 'bg-blue-400', text: 'text-blue-400' },
-  low: { bar: 'bg-accent-green', text: 'text-accent-green' },
+const severityClass: Record<string, string> = {
+  critical: 'bg-red-50 text-red-700',
+  high: 'bg-orange-50 text-orange-700',
+  medium: 'bg-amber-50 text-amber-700',
+  low: 'bg-green-50 text-green-700',
 };
+
+const progressClass: Record<string, string> = {
+  critical: 'bg-red-500',
+  high: 'bg-orange-500',
+  medium: 'bg-amber-500',
+  low: 'bg-green-500',
+};
+
+const scoreBar = (score: number, tone: string) => (
+  <div className="flex gap-1">
+    {Array.from({ length: 10 }, (_, index) => (
+      <span key={index} className={`h-2.5 w-full rounded-sm ${index < Math.round(score) ? tone : 'bg-slate-200'}`} />
+    ))}
+  </div>
+);
 
 const ImpactPanel: React.FC = () => {
   const [text, setText] = useState('');
@@ -21,98 +37,131 @@ const ImpactPanel: React.FC = () => {
     if (!text.trim()) return;
     setLoading(true);
     setError(null);
+
     try {
-      const res = await quickImpact(text.trim(), orgName.trim());
-      setResult(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Estimation failed');
+      const response = await quickImpact(text.trim(), orgName.trim());
+      setResult(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impact estimation failed');
     } finally {
       setLoading(false);
     }
   };
 
-  const colors = result ? (SEVERITY_COLORS[result.severity.toLowerCase()] ?? SEVERITY_COLORS.medium) : null;
+  const tone = result?.overall_severity?.toLowerCase() ?? 'medium';
 
   return (
-    <Card className="animate-slide-up">
-      <SectionHeader title="Leak Impact Estimator" accent="08" subtitle="financial & regulatory risk assessment" />
+    <Card className="h-full">
+      <SectionHeader
+        title="Leak Impact Estimator"
+        subtitle="Estimate business and regulatory impact from live API inference."
+        accent="Impact"
+      />
 
-      <div className="space-y-2 mb-3">
+      <div className="space-y-4">
         <input
           value={orgName}
-          onChange={e => setOrgName(e.target.value)}
+          onChange={(event) => setOrgName(event.target.value)}
           placeholder="Organization name (optional)"
-          className="w-full bg-bg-elevated border border-bg-border rounded-lg px-3 py-2 text-text-primary font-mono text-xs focus:outline-none focus:border-accent-cyan/40 placeholder:text-text-muted transition-colors"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
         <textarea
           value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder="Paste breach post text… e.g. 'Selling 2.5M customer records from Acme Corp. Includes SSN, credit cards, medical records.'"
-          className="w-full bg-bg-elevated border border-bg-border rounded-lg px-3 py-2.5 text-text-primary font-mono text-xs resize-none h-20 focus:outline-none focus:border-accent-cyan/40 placeholder:text-text-muted transition-colors"
+          onChange={(event) => setText(event.target.value)}
+          placeholder="Paste a breach or leak description..."
+          className="min-h-36 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
-        <button
-          onClick={handleEstimate}
-          disabled={loading || !text.trim()}
-          className="w-full flex items-center justify-center gap-2 bg-accent-amber/10 border border-accent-amber/30 hover:bg-accent-amber/20 text-accent-amber font-mono text-xs py-2 rounded-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading ? <><Spinner size="sm" /> Estimating…</> : '◬ Estimate Impact'}
-        </button>
-      </div>
 
-      {error && <p className="text-accent-red font-mono text-xs">{error}</p>}
+        <Button variant="ghost" onClick={() => void handleEstimate()} loading={loading} disabled={!text.trim()} className="w-full">
+          <ShieldAlert className="h-4 w-4" />
+          Estimate Impact
+        </Button>
 
-      {result && colors && (
-        <div className="animate-fade-in space-y-3">
-          {/* Risk score */}
-          <div className="flex items-center gap-4 p-3 bg-bg-elevated rounded-lg border border-bg-border">
-            <div className="text-center">
-              <div className={`font-display font-bold text-3xl ${colors.text}`}>
-                {result.risk_score.toFixed(1)}
-              </div>
-              <div className="text-text-muted font-mono text-[9px] uppercase">risk score</div>
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <div className="flex justify-between font-mono text-[10px]">
-                <span className="text-text-muted">Severity</span>
-                <span className={`font-semibold uppercase ${colors.text}`}>{result.severity}</span>
-              </div>
-              <div className="h-1.5 bg-bg-base rounded-full overflow-hidden">
-                <div className={`h-full ${colors.bar} rounded-full transition-all duration-700`} style={{ width: `${result.risk_score * 10}%` }} />
-              </div>
-              <div className="flex justify-between font-mono text-[10px]">
-                <span className="text-text-muted">Scale</span>
-                <span className="text-text-secondary">{result.scale}</span>
-              </div>
-            </div>
-          </div>
+        {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-2.5 bg-bg-elevated rounded-lg border border-bg-border">
-              <div className="text-text-muted font-mono text-[9px] uppercase mb-1">Records</div>
-              <div className="text-text-primary font-mono text-xs font-semibold">{result.records}</div>
+        {result ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Business Risk Score</p>
+                  <div className="mt-2 text-3xl font-semibold text-slate-900">{result.business_risk_score.toFixed(1)}</div>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${severityClass[tone] ?? severityClass.medium}`}>
+                  {result.scale_category.toUpperCase()}
+                </span>
+              </div>
+              <div className="mt-4">{scoreBar(result.business_risk_score, progressClass[tone] ?? progressClass.medium)}</div>
             </div>
-            <div className="p-2.5 bg-bg-elevated rounded-lg border border-bg-border">
-              <div className="text-text-muted font-mono text-[9px] uppercase mb-1">Est. Cost</div>
-              <div className="text-accent-amber font-mono text-xs font-semibold">{result.cost_range}</div>
-            </div>
-          </div>
 
-          {result.regulations.length > 0 && (
-            <div>
-              <div className="text-text-muted font-mono text-[9px] uppercase mb-1.5">Applicable Regulations</div>
-              <div className="flex flex-wrap gap-1">
-                {result.regulations.map(r => (
-                  <span key={r} className="px-2 py-0.5 bg-accent-red/10 border border-accent-red/20 rounded font-mono text-[9px] text-accent-red">{r}</span>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Landmark className="h-4 w-4" />
+                  <span className="text-xs uppercase tracking-wide">Records</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-slate-900">{result.estimated_records.formatted}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Scale className="h-4 w-4" />
+                  <span className="text-xs uppercase tracking-wide">Scale</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-slate-900">{result.primary_data_type}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <DollarSign className="h-4 w-4" />
+                  <span className="text-xs uppercase tracking-wide">Est. Cost</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-slate-900">{result.estimated_cost_range.formatted}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Risk Breakdown</p>
+              <div className="mt-4 space-y-4">
+                {Object.entries(result.risk_breakdown).map(([key, value]) => (
+                  <div key={key}>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="capitalize text-slate-600">{key}</span>
+                      <span className="font-semibold text-slate-900">{value.toFixed(1)}/10</span>
+                    </div>
+                    {scoreBar(value, progressClass[tone] ?? progressClass.medium)}
+                  </div>
                 ))}
               </div>
             </div>
-          )}
 
-          <p className="text-text-secondary font-mono text-[11px] leading-relaxed p-2.5 bg-bg-elevated rounded-lg border border-bg-border">
-            {result.summary}
-          </p>
-        </div>
-      )}
+            {result.applicable_regulations.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {result.applicable_regulations.filter((regulation) => regulation.applies).map((regulation) => (
+                  <span key={regulation.regulation} title={regulation.max_fine} className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+                    {regulation.regulation}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+              {result.impact_summary}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Recommended Actions</p>
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                {result.recommended_actions.map((action, index) => (
+                  <div key={`${action}-${index}`} className="rounded-xl bg-slate-50 px-3 py-2">
+                    <span className={action.startsWith('IMMEDIATE:') ? 'text-red-700' : action.startsWith('REGULATORY:') ? 'text-orange-700' : 'text-amber-700'}>
+                      {action}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </Card>
   );
 };

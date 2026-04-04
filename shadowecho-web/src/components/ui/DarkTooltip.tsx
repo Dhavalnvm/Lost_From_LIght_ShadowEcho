@@ -1,14 +1,14 @@
 import React from 'react';
 
-interface TooltipPayload {
+interface TooltipPayloadItem {
+  color?: string;
   name?: string;
   value?: string | number;
-  color?: string;
 }
 
 interface DarkTooltipProps {
   active?: boolean;
-  payload?: TooltipPayload[];
+  payload?: TooltipPayloadItem[];
   label?: string;
 }
 
@@ -16,15 +16,19 @@ const DarkTooltip: React.FC<DarkTooltipProps> = ({ active, payload, label }) => 
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="bg-bg-elevated border border-bg-border p-3" style={{ borderRadius: 0 }}>
-      {label ? <p className="font-mono text-[10px] text-text-muted mb-2">{label}</p> : null}
-      {payload.map((item, idx) => (
-        <div key={`${item.name}-${idx}`} className="flex items-center gap-2">
-          <span className="w-2 h-2" style={{ background: item.color ?? '#00c8f0' }} />
-          <span className="font-mono text-[10px] text-text-secondary">{item.name}</span>
-          <span className="font-mono text-[10px] text-text-primary">{String(item.value ?? '-')}</span>
-        </div>
-      ))}
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/70">
+      {label ? <p className="mb-2 text-xs font-medium text-slate-500">{label}</p> : null}
+      <div className="space-y-1">
+        {payload.map((item, index) => (
+          <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-4 text-xs">
+            <span className="flex items-center gap-2 text-slate-600">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color ?? '#2563eb' }} />
+              {item.name}
+            </span>
+            <span className="font-semibold text-slate-900">{String(item.value ?? '-')}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

@@ -1,78 +1,16 @@
-// src/components/common/index.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Production SOC component library — Splunk/Palo Alto inspired
-// Larger fonts, sharper hierarchy, no rounded corners, dense data feel
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React from 'react';
-
-// ─── Design tokens ─────────────────────────────────────────────────────────
-
-const T = {
-  bg:      '#03070f',
-  bg2:     '#060e1a',
-  bg3:     '#0a1525',
-  bg4:     '#0d1c30',
-  border:  '#0f2034',
-  border2: '#162d47',
-  border3: '#1e3d5e',
-  cyan:    '#00c8f0',
-  green:   '#00e87a',
-  red:     '#f0263e',
-  orange:  '#f07020',
-  yellow:  '#f0c800',
-  purple:  '#9b6dff',
-  text:    '#d0e8ff',
-  text2:   '#5a8ab0',
-  text3:   '#263d52',
-} as const;
-
-const F = {
-  display: "'Syne', sans-serif",
-  mono:    "'JetBrains Mono', monospace",
-  sans:    "'DM Sans', sans-serif",
-} as const;
-
-// ─── Card ─────────────────────────────────────────────────────────────────
 
 interface CardProps {
   children: React.ReactNode;
   className?: string;
-  glow?: 'cyan' | 'red' | 'amber' | 'green' | 'none';
   style?: React.CSSProperties;
 }
 
-const GLOW_STYLES: Record<string, React.CSSProperties> = {
-  cyan:  { boxShadow: '0 0 24px rgba(0,200,240,0.07), inset 0 0 0 1px rgba(0,200,240,0.15)' },
-  red:   { boxShadow: '0 0 24px rgba(240,38,62,0.07), inset 0 0 0 1px rgba(240,38,62,0.15)' },
-  amber: { boxShadow: '0 0 24px rgba(240,112,32,0.07), inset 0 0 0 1px rgba(240,112,32,0.15)' },
-  green: { boxShadow: '0 0 24px rgba(0,232,122,0.07), inset 0 0 0 1px rgba(0,232,122,0.15)' },
-  none:  { border: `1px solid ${T.border}` },
-};
-
-export const Card: React.FC<CardProps> = ({
-  children,
-  className = '',
-  glow = 'none',
-  style = {},
-}) => (
-  <div
-    className={`panel-top ${className}`}
-    style={{
-      background: 'linear-gradient(135deg, #060e1a 0%, #0a1525 100%)',
-      border: `1px solid ${T.border}`,
-      padding: 20,
-      position: 'relative',
-      overflow: 'hidden',
-      ...GLOW_STYLES[glow],
-      ...style,
-    }}
-  >
+export const Card: React.FC<CardProps> = ({ children, className = '', style }) => (
+  <div className={`rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${className}`} style={style}>
     {children}
   </div>
 );
-
-// ─── Section Header ───────────────────────────────────────────────────────
 
 interface SectionHeaderProps {
   title: string;
@@ -87,562 +25,167 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   accent,
   action,
 }) => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      marginBottom: 16,
-    }}
-  >
-    <div>
-      {/* Accent + title row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {accent && (
-          <span
-            style={{
-              fontFamily: F.mono,
-              fontSize: 9,
-              color: T.cyan,
-              letterSpacing: 2,
-              padding: '1px 5px',
-              border: `1px solid rgba(0,200,240,0.25)`,
-              background: 'rgba(0,200,240,0.06)',
-            }}
-          >
+  <div className="mb-5 flex items-start justify-between gap-4">
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        {accent ? (
+          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700">
             {accent}
           </span>
-        )}
-        <h2
-          style={{
-            fontFamily: F.sans,
-            fontSize: 13,
-            fontWeight: 500,
-            color: T.text2,
-            letterSpacing: 0.3,
-            textTransform: 'uppercase',
-          }}
-        >
-          {title}
-        </h2>
+        ) : null}
+        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
       </div>
-
-      {/* Subtitle */}
-      {subtitle && (
-        <p
-          style={{
-            fontFamily: F.mono,
-            fontSize: 10,
-            color: T.text3,
-            marginTop: 3,
-            letterSpacing: 1,
-          }}
-        >
-          {subtitle}
-        </p>
-      )}
+      {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
     </div>
-
-    {action && <div>{action}</div>}
+    {action ? <div className="shrink-0">{action}</div> : null}
   </div>
 );
 
-// ─── Severity Badge ───────────────────────────────────────────────────────
+export const SeverityBadge: React.FC<{ severity: string; className?: string }> = ({
+  severity,
+  className = '',
+}) => {
+  const tone =
+    severity.toLowerCase() === 'critical'
+      ? 'bg-red-50 text-red-700'
+      : severity.toLowerCase() === 'high'
+        ? 'bg-orange-50 text-orange-700'
+        : severity.toLowerCase() === 'medium'
+          ? 'bg-amber-50 text-amber-700'
+          : 'bg-green-50 text-green-700';
 
-interface BadgeProps {
-  severity: string;
-  className?: string;
-  style?: React.CSSProperties;
-}
+  const dot =
+    severity.toLowerCase() === 'critical'
+      ? 'bg-red-600'
+      : severity.toLowerCase() === 'high'
+        ? 'bg-orange-500'
+        : severity.toLowerCase() === 'medium'
+          ? 'bg-amber-500'
+          : 'bg-green-500';
 
-const SEV_STYLES: Record<string, { bg: string; color: string; border: string }> = {
-  critical: { bg: 'rgba(240,38,62,0.12)',  color: '#f0263e', border: 'rgba(240,38,62,0.35)' },
-  high:     { bg: 'rgba(240,112,32,0.12)', color: '#f07020', border: 'rgba(240,112,32,0.35)' },
-  medium:   { bg: 'rgba(240,200,0,0.10)',  color: '#f0c800', border: 'rgba(240,200,0,0.30)' },
-  low:      { bg: 'rgba(0,204,102,0.10)',  color: '#00cc66', border: 'rgba(0,204,102,0.30)' },
-};
-
-export const SeverityBadge: React.FC<BadgeProps> = ({ severity, style = {} }) => {
-  const s = SEV_STYLES[severity.toLowerCase()] ?? SEV_STYLES.low;
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 5,
-        padding: '3px 8px',
-        fontFamily: F.mono,
-        fontSize: 10,
-        fontWeight: 500,
-        letterSpacing: 2,
-        textTransform: 'uppercase',
-        background: s.bg,
-        color: s.color,
-        border: `1px solid ${s.border}`,
-        ...style,
-      }}
-    >
-      <span
-        style={{
-          width: 5,
-          height: 5,
-          borderRadius: '50%',
-          background: s.color,
-          flexShrink: 0,
-        }}
-      />
+    <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-semibold ${tone} ${className}`}>
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
       {severity}
     </span>
   );
 };
 
-// ─── Stat Card ────────────────────────────────────────────────────────────
-
 interface StatCardProps {
   label: string;
   value: number | string;
   sub?: string;
-  color?: 'cyan' | 'red' | 'amber' | 'green' | 'muted';
   accent?: string;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
 }
 
-const COLOR_MAP: Record<string, string> = {
-  cyan:  '#00c8f0',
-  red:   '#f0263e',
-  amber: '#f07020',
-  green: '#00e87a',
-  muted: '#5a8ab0',
-};
-
 export const StatCard: React.FC<StatCardProps> = ({
   label,
   value,
   sub,
-  color = 'cyan',
-  accent,
+  accent = 'text-blue-600',
   trend,
   trendValue,
-}) => {
-  const col = COLOR_MAP[color];
-  const trendColor = trend === 'up' ? T.red : trend === 'down' ? T.green : T.text2;
-
-  return (
-    <div
-      className="panel-top"
-      style={{
-        background: 'linear-gradient(135deg, #060e1a 0%, #0a1525 100%)',
-        border: `1px solid ${T.border}`,
-        padding: 20,
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Bottom glow accent */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 2,
-          background: `linear-gradient(90deg, transparent, ${col}88, transparent)`,
-        }}
-      />
-
-      {/* Label */}
-      <div
-        style={{
-          fontFamily: F.mono,
-          fontSize: 9,
-          letterSpacing: 3,
-          textTransform: 'uppercase',
-          color: T.text3,
-          marginBottom: 10,
-        }}
-      >
-        {label}
+}) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{label}</p>
+        <div className={`mt-3 text-3xl font-bold tracking-tight ${accent}`}>{value}</div>
       </div>
-
-      {/* Value row */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 6 }}>
-        <div
-          style={{
-            fontFamily: F.display,
-            fontSize: 38,
-            fontWeight: 900,
-            color: col,
-            lineHeight: 1,
-            textShadow: `0 0 24px ${col}44`,
-          }}
+      {trend && trendValue ? (
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+            trend === 'up'
+              ? 'bg-green-50 text-green-700'
+              : trend === 'down'
+                ? 'bg-red-50 text-red-700'
+                : 'bg-slate-100 text-slate-600'
+          }`}
         >
-          {value ?? '—'}
-        </div>
-
-        {trend && trendValue && (
-          <div
-            style={{
-              fontFamily: F.mono,
-              fontSize: 11,
-              color: trendColor,
-              marginBottom: 4,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'}
-            {trendValue}
-          </div>
-        )}
-      </div>
-
-      {/* Sub + accent row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        {sub && (
-          <div
-            style={{
-              fontFamily: F.mono,
-              fontSize: 10,
-              color: T.text3,
-              letterSpacing: 0.5,
-            }}
-          >
-            {sub}
-          </div>
-        )}
-        {accent && (
-          <div
-            style={{
-              fontFamily: F.mono,
-              fontSize: 9,
-              color: col,
-              padding: '2px 6px',
-              border: `1px solid ${col}33`,
-              background: `${col}0d`,
-              letterSpacing: 1,
-            }}
-          >
-            {accent}
-          </div>
-        )}
-      </div>
+          {trend === 'up' ? 'Up' : trend === 'down' ? 'Down' : 'Flat'} {trendValue}
+        </span>
+      ) : null}
     </div>
-  );
-};
-
-// ─── Stat Pill (topbar variant) ───────────────────────────────────────────
-
-interface StatPillProps {
-  label: string;
-  value: number | string;
-  color?: 'cyan' | 'red' | 'amber' | 'green' | 'muted';
-}
-
-export const StatPill: React.FC<StatPillProps> = ({ label, value, color = 'cyan' }) => {
-  const col = COLOR_MAP[color];
-  return (
-    <div style={{ textAlign: 'right' }}>
-      <div
-        style={{
-          fontFamily: F.display,
-          fontSize: 22,
-          fontWeight: 700,
-          color: col,
-          lineHeight: 1,
-          textShadow: `0 0 16px ${col}44`,
-        }}
-      >
-        {value ?? '—'}
-      </div>
-      <div
-        style={{
-          fontFamily: F.mono,
-          fontSize: 8,
-          color: T.text3,
-          letterSpacing: 2,
-          textTransform: 'uppercase',
-          marginTop: 2,
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-};
-
-// ─── Loading Spinner ──────────────────────────────────────────────────────
+    {sub ? <p className="mt-2 text-sm text-slate-500">{sub}</p> : null}
+  </div>
+);
 
 export const Spinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }) => {
-  const dims: Record<string, number> = { sm: 16, md: 24, lg: 36 };
-  const d = dims[size];
-  return (
-    <div
-      style={{
-        width: d,
-        height: d,
-        border: `${size === 'sm' ? 1.5 : 2}px solid ${T.border2}`,
-        borderTopColor: T.cyan,
-        borderRadius: '50%',
-        animation: 'spin 0.7s linear infinite',
-        flexShrink: 0,
-      }}
-    />
-  );
+  const dimension = size === 'sm' ? 'h-4 w-4 border-2' : size === 'lg' ? 'h-9 w-9 border-[3px]' : 'h-6 w-6 border-2';
+  return <div className={`${dimension} animate-spin rounded-full border-slate-200 border-t-blue-600`} />;
 };
 
-// ─── Empty State ──────────────────────────────────────────────────────────
-
-export const EmptyState: React.FC<{ message: string; icon?: string }> = ({
-  message,
-  icon = '∅',
-}) => (
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '48px 24px',
-      textAlign: 'center',
-    }}
-  >
-    <div
-      style={{
-        width: 48,
-        height: 48,
-        border: `1px solid ${T.border2}`,
-        background: T.bg3,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 14,
-      }}
-    >
-      <span
-        style={{
-          fontFamily: F.mono,
-          fontSize: 20,
-          color: T.text3,
-        }}
-      >
-        {icon}
-      </span>
+export const EmptyState: React.FC<{ message: string; icon?: string }> = ({ message, icon = '•' }) => (
+  <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-lg font-semibold text-slate-400 shadow-sm">
+      {icon}
     </div>
-    <p
-      style={{
-        fontFamily: F.mono,
-        fontSize: 12,
-        color: T.text3,
-        letterSpacing: 1,
-      }}
-    >
-      {message}
-    </p>
+    <p className="mt-4 max-w-md text-sm text-slate-500">{message}</p>
   </div>
 );
-
-// ─── Error Banner ─────────────────────────────────────────────────────────
 
 export const ErrorBanner: React.FC<{ message: string }> = ({ message }) => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      background: 'rgba(240,38,62,0.08)',
-      border: `1px solid rgba(240,38,62,0.25)`,
-      padding: '12px 16px',
-      marginBottom: 16,
-    }}
-  >
-    <span
-      style={{
-        fontFamily: F.mono,
-        fontSize: 11,
-        fontWeight: 700,
-        color: T.red,
-        letterSpacing: 2,
-      }}
-    >
-      ERR
-    </span>
-    <span
-      style={{
-        fontFamily: F.mono,
-        fontSize: 12,
-        color: T.text2,
-      }}
-    >
-      {message}
-    </span>
+  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    {message}
   </div>
 );
-
-// ─── Live Indicator ───────────────────────────────────────────────────────
 
 export const LiveIndicator: React.FC<{ updatedAt: Date | null }> = ({ updatedAt }) => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 7,
-      border: `1px solid rgba(0,232,122,0.25)`,
-      background: 'rgba(0,232,122,0.06)',
-      padding: '4px 10px',
-    }}
-  >
-    <span
-      style={{
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        background: T.green,
-        boxShadow: `0 0 6px ${T.green}`,
-        animation: 'pulse 2s ease-in-out infinite',
-        flexShrink: 0,
-      }}
-    />
-    <span
-      style={{
-        fontFamily: F.mono,
-        fontSize: 9,
-        color: T.green,
-        letterSpacing: 2,
-        textTransform: 'uppercase',
-      }}
-    >
-      LIVE
-    </span>
-    {updatedAt && (
-      <span
-        style={{
-          fontFamily: F.mono,
-          fontSize: 10,
-          color: T.text2,
-        }}
-      >
-        · {updatedAt.toLocaleTimeString()}
-      </span>
-    )}
+  <div className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
+    <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+    Live
+    {updatedAt ? <span className="text-green-600/80">{updatedAt.toLocaleTimeString()}</span> : null}
   </div>
 );
 
-// ─── Score Bar ────────────────────────────────────────────────────────────
-
-interface ScoreBarProps {
-  value: number;       // 0–100
-  color?: string;
-  showLabel?: boolean;
-  height?: number;
-}
-
-export const ScoreBar: React.FC<ScoreBarProps> = ({
+export const ScoreBar: React.FC<{ value: number; color?: string; showLabel?: boolean; height?: number }> = ({
   value,
-  color = T.cyan,
+  color = '#3b82f6',
   showLabel = true,
-  height = 3,
+  height = 8,
 }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-    <div
-      style={{
-        flex: 1,
-        height,
-        background: T.border,
-        overflow: 'hidden',
-      }}
-    >
+  <div className="flex items-center gap-3">
+    <div className="flex-1 overflow-hidden rounded-full bg-slate-100" style={{ height }}>
       <div
-        style={{
-          width: `${Math.max(0, Math.min(100, value))}%`,
-          height: '100%',
-          background: `linear-gradient(90deg, ${color}88, ${color})`,
-          transition: 'width 0.5s ease',
-        }}
+        className="rounded-full transition-all duration-500"
+        style={{ width: `${Math.max(0, Math.min(100, value))}%`, height, backgroundColor: color }}
       />
     </div>
-    {showLabel && (
-      <span
-        style={{
-          fontFamily: F.mono,
-          fontSize: 10,
-          color: T.text2,
-          minWidth: 32,
-          textAlign: 'right',
-        }}
-      >
-        {value}%
-      </span>
-    )}
+    {showLabel ? <span className="min-w-10 text-right text-xs font-medium text-slate-600">{value}%</span> : null}
   </div>
 );
 
-// ─── Confidence Ring ─────────────────────────────────────────────────────
-
-export const ConfidenceRing: React.FC<{ pct: number; size?: number }> = ({
-  pct,
-  size = 64,
-}) => {
-  const r = (size / 2) - 5;
-  const circ = 2 * Math.PI * r;
-  const fill = (pct / 100) * circ;
-  const col = pct > 75 ? T.red : pct > 50 ? T.orange : T.cyan;
+export const ConfidenceRing: React.FC<{ pct: number; size?: number }> = ({ pct, size = 64 }) => {
+  const normalized = Math.max(0, Math.min(100, pct));
+  const radius = size / 2 - 5;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (normalized / 100) * circumference;
+  const stroke = normalized >= 75 ? '#dc2626' : normalized >= 50 ? '#f59e0b' : '#2563eb';
 
   return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        style={{ transform: 'rotate(-90deg)' }}
-      >
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#e2e8f0" strokeWidth="5" />
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={r}
+          r={radius}
           fill="none"
-          stroke={T.border2}
-          strokeWidth={3}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={col}
-          strokeWidth={3}
-          strokeDasharray={`${fill} ${circ - fill}`}
-          strokeLinecap="butt"
+          stroke={stroke}
+          strokeWidth="5"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
         />
       </svg>
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-        }}
-      >
-        <span
-          style={{
-            fontFamily: F.display,
-            fontSize: size > 56 ? 13 : 10,
-            fontWeight: 700,
-            color: col,
-            lineHeight: 1,
-          }}
-        >
-          {pct}%
-        </span>
+      <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-slate-700">
+        {normalized}%
       </div>
     </div>
   );
 };
-
-// ─── Data Table ───────────────────────────────────────────────────────────
 
 interface Column<T> {
   key: keyof T | string;
@@ -662,82 +205,41 @@ export function DataTable<T extends Record<string, unknown>>({
   columns,
   data,
   rowKey,
-  emptyMessage = 'No data',
+  emptyMessage = 'No data available',
 }: DataTableProps<T>) {
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontFamily: F.mono,
-          fontSize: 11,
-        }}
-      >
-        <thead>
+    <div className="overflow-x-auto rounded-2xl border border-slate-200">
+      <table className="min-w-full divide-y divide-slate-200 text-sm">
+        <thead className="bg-slate-50">
           <tr>
-            {columns.map(col => (
+            {columns.map((col) => (
               <th
                 key={String(col.key)}
-                style={{
-                  padding: '8px 14px',
-                  textAlign: col.align ?? 'left',
-                  fontFamily: F.mono,
-                  fontSize: 8,
-                  fontWeight: 400,
-                  letterSpacing: 2.5,
-                  textTransform: 'uppercase',
-                  color: T.text3,
-                  borderBottom: `1px solid ${T.border2}`,
-                  borderTop: `1px solid ${T.border}`,
-                  background: T.bg3,
-                  whiteSpace: 'nowrap',
-                }}
+                className={`px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 ${
+                  col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
+                }`}
               >
                 {col.label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100 bg-white">
           {data.length === 0 ? (
             <tr>
-              <td
-                colSpan={columns.length}
-                style={{
-                  padding: '32px 14px',
-                  textAlign: 'center',
-                  color: T.text3,
-                  fontFamily: F.mono,
-                  fontSize: 11,
-                  letterSpacing: 1,
-                }}
-              >
+              <td colSpan={columns.length} className="px-4 py-8 text-center text-sm text-slate-500">
                 {emptyMessage}
               </td>
             </tr>
           ) : (
-            data.map(row => (
-              <tr
-                key={String(row[rowKey])}
-                style={{ borderBottom: `1px solid ${T.border}` }}
-                onMouseEnter={e =>
-                  ((e.currentTarget as HTMLElement).style.background =
-                    'rgba(0,200,240,0.018)')
-                }
-                onMouseLeave={e =>
-                  ((e.currentTarget as HTMLElement).style.background = 'transparent')
-                }
-              >
-                {columns.map(col => (
+            data.map((row) => (
+              <tr key={String(row[rowKey])} className="hover:bg-slate-50">
+                {columns.map((col) => (
                   <td
                     key={String(col.key)}
-                    style={{
-                      padding: '10px 14px',
-                      color: T.text,
-                      textAlign: col.align ?? 'left',
-                      verticalAlign: 'middle',
-                    }}
+                    className={`px-4 py-3 text-slate-700 ${
+                      col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
+                    }`}
                   >
                     {col.render
                       ? col.render(row)
@@ -753,8 +255,6 @@ export function DataTable<T extends Record<string, unknown>>({
   );
 }
 
-// ─── Panel (titled container) ─────────────────────────────────────────────
-
 interface PanelProps {
   title: string;
   action?: React.ReactNode;
@@ -763,58 +263,15 @@ interface PanelProps {
   noPadding?: boolean;
 }
 
-export const Panel: React.FC<PanelProps> = ({
-  title,
-  action,
-  children,
-  style = {},
-  noPadding = false,
-}) => (
-  <div
-    className="panel-top"
-    style={{
-      background: 'linear-gradient(135deg, #060e1a 0%, #0a1525 100%)',
-      border: `1px solid ${T.border}`,
-      position: 'relative',
-      overflow: 'hidden',
-      ...style,
-    }}
-  >
-    {/* Header */}
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '10px 16px',
-        borderBottom: `1px solid ${T.border}`,
-        background: 'rgba(0,200,240,0.015)',
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          fontFamily: F.sans,
-          fontSize: 11,
-          fontWeight: 500,
-          color: T.text2,
-          letterSpacing: 0.3,
-          textTransform: 'uppercase',
-        }}
-      >
-        {title}
-      </span>
+export const Panel: React.FC<PanelProps> = ({ title, action, children, style, noPadding = false }) => (
+  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" style={style}>
+    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
+      <span className="text-sm font-semibold text-slate-800">{title}</span>
       {action}
     </div>
-
-    {/* Content */}
-    <div style={noPadding ? {} : { padding: 16 }}>
-      {children}
-    </div>
+    <div className={noPadding ? '' : 'p-5'}>{children}</div>
   </div>
 );
-
-// ─── Button ───────────────────────────────────────────────────────────────
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'cyan' | 'green' | 'red' | 'ghost';
@@ -822,132 +279,61 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
 }
 
-const BTN_VARIANTS: Record<string, { bg: string; border: string; color: string; hoverBg: string }> = {
-  cyan:  { bg: 'rgba(0,200,240,0.07)',  border: '#00c8f0', color: '#00c8f0', hoverBg: 'rgba(0,200,240,0.14)' },
-  green: { bg: 'rgba(0,232,122,0.07)',  border: '#00e87a', color: '#00e87a', hoverBg: 'rgba(0,232,122,0.14)' },
-  red:   { bg: 'rgba(240,38,62,0.07)',  border: '#f0263e', color: '#f0263e', hoverBg: 'rgba(240,38,62,0.14)' },
-  ghost: { bg: 'transparent',           border: T.border2, color: T.text2,   hoverBg: 'rgba(255,255,255,0.03)' },
-};
-
-const BTN_SIZES: Record<string, { padding: string; fontSize: number }> = {
-  sm: { padding: '5px 10px', fontSize: 9 },
-  md: { padding: '8px 16px', fontSize: 10 },
-  lg: { padding: '11px 22px', fontSize: 11 },
-};
-
 export const Button: React.FC<ButtonProps> = ({
   children,
   variant = 'cyan',
   size = 'md',
   loading = false,
+  className = '',
   disabled,
-  style = {},
   ...rest
 }) => {
-  const v = BTN_VARIANTS[variant];
-  const s = BTN_SIZES[size];
-  const isDisabled = disabled || loading;
+  const sizeClass = size === 'sm' ? 'px-3 py-1.5 text-xs' : size === 'lg' ? 'px-5 py-3 text-sm' : 'px-4 py-2 text-sm';
+  const variantClass =
+    variant === 'green'
+      ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+      : variant === 'red'
+        ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+        : variant === 'ghost'
+          ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+          : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100';
 
   return (
     <button
       {...rest}
-      disabled={isDisabled}
-      style={{
-        background: v.bg,
-        border: `1px solid ${v.border}`,
-        color: v.color,
-        padding: s.padding,
-        fontFamily: F.mono,
-        fontSize: s.fontSize,
-        letterSpacing: 1.5,
-        textTransform: 'uppercase',
-        cursor: isDisabled ? 'not-allowed' : 'pointer',
-        opacity: isDisabled ? 0.35 : 1,
-        transition: 'background 0.14s, box-shadow 0.14s',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        whiteSpace: 'nowrap',
-        ...style,
-      }}
-      onMouseEnter={e => {
-        if (!isDisabled)
-          (e.currentTarget as HTMLElement).style.background = v.hoverBg;
-      }}
-      onMouseLeave={e => {
-        if (!isDisabled)
-          (e.currentTarget as HTMLElement).style.background = v.bg;
-      }}
+      disabled={disabled || loading}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl border font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${sizeClass} ${variantClass} ${className}`}
     >
-      {loading && (
-        <div
-          style={{
-            width: 10,
-            height: 10,
-            border: `1.5px solid ${v.border}44`,
-            borderTopColor: v.color,
-            borderRadius: '50%',
-            animation: 'spin 0.7s linear infinite',
-          }}
-        />
-      )}
+      {loading ? <Spinner size="sm" /> : null}
       {children}
     </button>
   );
 };
 
-// ─── Input / Textarea / Select ────────────────────────────────────────────
-
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-}
-
-export const Input: React.FC<InputProps> = ({ label, style = {}, ...rest }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && (
-      <label
-        style={{
-          fontFamily: F.mono,
-          fontSize: 9,
-          color: T.text3,
-          letterSpacing: 2,
-          textTransform: 'uppercase',
-        }}
-      >
-        {label}
-      </label>
-    )}
+export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label?: string }> = ({
+  label,
+  className = '',
+  ...rest
+}) => (
+  <div className="space-y-1.5">
+    {label ? <label className="text-xs font-medium text-slate-600">{label}</label> : null}
     <input
-      className="se-input"
-      style={{ fontSize: 12, ...style }}
       {...rest}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 ${className}`}
     />
   </div>
 );
 
-interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label?: string;
-}
-
-export const Textarea: React.FC<TextareaProps> = ({ label, style = {}, ...rest }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && (
-      <label
-        style={{
-          fontFamily: F.mono,
-          fontSize: 9,
-          color: T.text3,
-          letterSpacing: 2,
-          textTransform: 'uppercase',
-        }}
-      >
-        {label}
-      </label>
-    )}
+export const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string }> = ({
+  label,
+  className = '',
+  ...rest
+}) => (
+  <div className="space-y-1.5">
+    {label ? <label className="text-xs font-medium text-slate-600">{label}</label> : null}
     <textarea
-      className="se-ta"
-      style={{ fontSize: 12, ...style }}
       {...rest}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 ${className}`}
     />
   </div>
 );

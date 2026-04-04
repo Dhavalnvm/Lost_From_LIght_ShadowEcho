@@ -3,7 +3,7 @@ import { Card } from '../components/common';
 
 const NotebookView: React.FC = () => (
   <Card>
-    <div className="font-mono text-xs text-text-secondary">Notebook module is not wired in this branch.</div>
+    <div className="text-sm text-slate-600">Notebook module is not wired in this branch.</div>
   </Card>
 );
 

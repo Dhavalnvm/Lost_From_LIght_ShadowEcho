@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import Topbar from './components/layout/Topbar';
@@ -12,14 +12,19 @@ import LineupView from './views/LineupView';
 import MirrorView from './views/MirrorView';
 import ReportView from './views/ReportView';
 
-const App: React.FC = () => (
-  <BrowserRouter>
-    <div className="flex h-screen grid-bg scan" style={{ backgroundColor: '#071018', color: '#edf5f1' }}>
-      <Sidebar />
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar />
-        <div className="min-h-0 flex-1 overflow-auto">
-          <div className="mx-auto max-w-[1520px] px-5 py-5 xl:px-6">
+const App: React.FC = () => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+
+  return (
+    <BrowserRouter>
+      <div className="flex h-screen bg-slate-50 text-slate-900">
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        />
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Topbar />
+          <div className="flex-1 overflow-y-auto p-6">
             <Routes>
               <Route path="/" element={<DashboardView />} />
               <Route path="/alerts" element={<AlertsView />} />
@@ -31,11 +36,11 @@ const App: React.FC = () => (
               <Route path="/report" element={<ReportView />} />
             </Routes>
           </div>
-        </div>
-        <ChatbotFloating />
-      </main>
-    </div>
-  </BrowserRouter>
-);
+          <ChatbotFloating />
+        </main>
+      </div>
+    </BrowserRouter>
+  );
+};
 
 export default App;

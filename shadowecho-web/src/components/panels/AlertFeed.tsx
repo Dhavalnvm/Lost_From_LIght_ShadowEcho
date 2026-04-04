@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { acknowledgeAlert } from '../../services/api';
 import type { Alert } from '../../types/api';
-import { Card, EmptyState, SectionHeader, SeverityBadge, Spinner } from '../common';
+import { Card, EmptyState, SectionHeader, SeverityBadge } from '../common';
 
 interface Props {
   alerts: Alert[];
@@ -12,13 +12,13 @@ const AlertFeedPanel: React.FC<Props> = ({ alerts, onRefresh }) => {
   const [acking, setAcking] = useState<Set<number | string>>(new Set());
 
   const handleAcknowledge = async (id: number | string) => {
-    setAcking(prev => new Set(prev).add(id));
+    setAcking((current) => new Set(current).add(id));
     try {
       await acknowledgeAlert(id);
       await onRefresh?.();
     } finally {
-      setAcking(prev => {
-        const next = new Set(prev);
+      setAcking((current) => {
+        const next = new Set(current);
         next.delete(id);
         return next;
       });
@@ -26,71 +26,39 @@ const AlertFeedPanel: React.FC<Props> = ({ alerts, onRefresh }) => {
   };
 
   return (
-    <Card className="animate-fade-in">
-      <SectionHeader
-        title="Alert Feed"
-        accent="04"
-        subtitle={`${alerts.length} recent alerts`}
-      />
-
+    <Card>
+      <SectionHeader title="Alert Feed" subtitle={`${alerts.length} recent alerts`} accent="Feed" />
       {alerts.length === 0 ? (
-        <EmptyState message="No recent alerts available" />
+        <EmptyState message="No recent alerts available." />
       ) : (
-        <div className="space-y-2">
-          {alerts.map(alert => {
-            const isAcking = acking.has(alert.id);
-            const isAcknowledged = alert.acknowledged;
-
-            return (
-              <div
-                key={alert.id}
-                className={`rounded-lg border p-3 transition-all duration-200 ${
-                  isAcknowledged
-                    ? 'border-bg-border bg-bg-elevated opacity-60'
-                    : alert.severity === 'critical'
-                      ? 'border-accent-red/20 bg-accent-red/5 hover:border-accent-red/35'
-                      : alert.severity === 'high'
-                        ? 'border-accent-amber/20 bg-accent-amber/5 hover:border-accent-amber/35'
-                        : 'border-bg-border bg-bg-elevated hover:border-accent-cyan/20'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <SeverityBadge severity={alert.severity} className="shrink-0" />
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-xs text-text-primary">
-                      {alert.title || 'Untitled alert'}
-                    </p>
-                    <p className="mt-1 line-clamp-2 font-mono text-[10px] text-text-muted">
-                      {alert.summary || 'No alert summary provided.'}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-text-secondary">
-                      <span>Confidence {(alert.confidence * 100).toFixed(0)}%</span>
-                      {alert.post_id && <span>Post {String(alert.post_id).slice(0, 8)}...</span>}
-                      {alert.created_at && (
-                        <span>{new Date(alert.created_at).toLocaleTimeString()}</span>
-                      )}
-                    </div>
+        <div className="space-y-3">
+          {alerts.map((alert) => (
+            <div key={String(alert.id)} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-start gap-3">
+                <SeverityBadge severity={alert.severity} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-900">{alert.title || 'Untitled alert'}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">{alert.summary || 'No alert summary provided.'}</p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <span>Confidence {((alert.confidence ?? 0) * 100).toFixed(0)}%</span>
+                    {alert.post_id ? <span>Post {String(alert.post_id).slice(0, 8)}…</span> : null}
                   </div>
-
-                  {!isAcknowledged ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleAcknowledge(alert.id)}
-                      disabled={isAcking}
-                      className="shrink-0 rounded-lg border border-accent-green/25 bg-accent-green/10 px-3 py-1.5 font-mono text-[10px] text-accent-green transition-all hover:bg-accent-green/20 disabled:opacity-40"
-                    >
-                      {isAcking ? <Spinner size="sm" /> : 'Acknowledge'}
-                    </button>
-                  ) : (
-                    <span className="shrink-0 font-mono text-[10px] text-accent-green/60">
-                      Acknowledged
-                    </span>
-                  )}
                 </div>
+                {!alert.acknowledged ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleAcknowledge(alert.id)}
+                    disabled={acking.has(alert.id)}
+                    className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {acking.has(alert.id) ? 'Acknowledging…' : 'Acknowledge'}
+                  </button>
+                ) : (
+                  <span className="rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">Acknowledged</span>
+                )}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </Card>

@@ -1,240 +1,75 @@
-// src/pages/LineupPage.tsx
 import React from 'react';
+import { Card, SectionHeader } from '../components/common';
+import PageHeader from '../components/layout/PageHeader';
 import LineupPanel from '../components/panels/LineupPanel';
 
-const SIM_LEVELS = [
+const ranges = [
   {
-    range: '90–100%',
-    color: '#ff2244',
-    bg: 'rgba(255,34,68,0.06)',
-    border: 'rgba(255,34,68,0.25)',
-    label: 'VERY HIGH',
-    note: 'Likely same author or copied content. Verify independently.',
-    barW: '100%',
+    label: '90-100%',
+    title: 'Very High',
+    note: 'Likely shared authorship or copied content. Verify independently before action.',
+    tone: 'bg-red-50 text-red-700',
   },
   {
-    range: '75–89%',
-    color: '#ff6600',
-    bg: 'rgba(255,102,0,0.06)',
-    border: 'rgba(255,102,0,0.25)',
-    label: 'HIGH',
-    note: 'Possibly same actor or campaign. Analyst judgment required.',
-    barW: '80%',
+    label: '75-89%',
+    title: 'High',
+    note: 'Possible campaign overlap or operator similarity with meaningful analyst value.',
+    tone: 'bg-orange-50 text-orange-700',
   },
   {
-    range: '60–74%',
-    color: '#ffcc00',
-    bg: 'rgba(255,204,0,0.04)',
-    border: 'rgba(255,204,0,0.2)',
-    label: 'MODERATE',
-    note: 'Shared topic or style — may be coincidental.',
-    barW: '60%',
+    label: '60-74%',
+    title: 'Moderate',
+    note: 'Shared themes or style, but correlation may still be coincidental.',
+    tone: 'bg-amber-50 text-amber-700',
   },
   {
-    range: '<60%',
-    color: 'rgba(90,138,176,0.5)',
-    bg: 'rgba(255,255,255,0.02)',
-    border: 'rgba(255,255,255,0.06)',
-    label: 'LOW',
-    note: 'Weak connection. Included for completeness.',
-    barW: '35%',
+    label: '<60%',
+    title: 'Low',
+    note: 'Weak relationship retained for completeness and deeper review if needed.',
+    tone: 'bg-green-50 text-green-700',
   },
 ];
 
 const LineupPage: React.FC = () => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 20, animation: 'fadeUp 0.3s ease' }}>
+  <div className="space-y-6">
+    <PageHeader
+      title="The Lineup"
+      subtitle="Behavioral and linguistic similarity analysis presented in the same light analyst UI as the rest of the platform."
+    />
 
-    {/* ── Header ────────────────────────────────────────────────── */}
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div>
-          <h1 style={{
-            fontFamily: "'Orbitron',monospace",
-            fontSize: 26,
-            fontWeight: 700,
-            color: '#c8dff0',
-            letterSpacing: '0.1em',
-            lineHeight: 1,
-          }}>
-            THE LINEUP
-          </h1>
-          <p style={{
-            fontFamily: "'Share Tech Mono',monospace",
-            fontSize: 11,
-            color: 'rgba(90,138,176,0.7)',
-            letterSpacing: '0.15em',
-            marginTop: 4,
-            textTransform: 'uppercase',
-          }}>
-            Behavioral + linguistic similarity · never claims identity
-          </p>
-        </div>
-      </div>
-
-      {/* Warning pill */}
-      <div style={{
-        padding: '8px 14px',
-        border: '1px solid rgba(255,204,0,0.3)',
-        background: 'rgba(255,204,0,0.04)',
-        maxWidth: 260,
-      }}>
-        <div style={{
-          fontFamily: "'Share Tech Mono',monospace",
-          fontSize: 9,
-          color: '#ffcc00',
-          letterSpacing: '0.15em',
-          marginBottom: 3,
-        }}>
-          ◬ ANALYST NOTICE
-        </div>
-        <p style={{
-          fontFamily: "'Share Tech Mono',monospace",
-          fontSize: 9,
-          color: 'rgba(255,204,0,0.65)',
-          lineHeight: 1.5,
-        }}>
-          Similarity scores are behavioral indicators only. Independent verification required before action.
-        </p>
-      </div>
-    </div>
-
-    {/* ── Main grid ─────────────────────────────────────────────── */}
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 14 }}>
+    <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
       <LineupPanel />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-        {/* Similarity scale */}
-        <div style={{
-          border: '1px solid rgba(14,32,53,1)',
-          background: 'rgba(7,16,28,0.9)',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '10px 16px',
-            borderBottom: '1px solid rgba(14,32,53,1)',
-            background: 'rgba(0,212,255,0.02)',
-          }}>
-            <span style={{
-              fontFamily: "'Share Tech Mono',monospace",
-              fontSize: 9,
-              letterSpacing: '0.25em',
-              color: 'rgba(90,138,176,0.6)',
-              textTransform: 'uppercase',
-            }}>
-              ◈ Similarity Scale
-            </span>
-          </div>
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {SIM_LEVELS.map(item => (
-              <div
-                key={item.range}
-                style={{
-                  padding: '12px 14px',
-                  background: item.bg,
-                  border: `1px solid ${item.border}`,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{
-                    fontFamily: "'Orbitron',monospace",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: item.color,
-                  }}>
-                    {item.range}
-                  </span>
-                  <span style={{
-                    fontFamily: "'Share Tech Mono',monospace",
-                    fontSize: 8,
-                    letterSpacing: '0.2em',
-                    color: item.color,
-                    padding: '2px 6px',
-                    border: `1px solid ${item.border}`,
-                  }}>
-                    {item.label}
-                  </span>
+      <div className="space-y-6">
+        <Card>
+          <SectionHeader title="Similarity Scale" subtitle="How to read model confidence ranges" accent="Guide" />
+          <div className="space-y-3">
+            {ranges.map((range) => (
+              <div key={range.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${range.tone}`}>{range.label}</span>
+                  <span className="text-sm font-semibold text-slate-900">{range.title}</span>
                 </div>
-                {/* Visual bar */}
-                <div style={{
-                  height: 3,
-                  background: 'rgba(255,255,255,0.05)',
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                  marginBottom: 8,
-                }}>
-                  <div style={{
-                    width: item.barW,
-                    height: '100%',
-                    background: item.color,
-                    borderRadius: 2,
-                  }} />
-                </div>
-                <p style={{
-                  fontFamily: "'Share Tech Mono',monospace",
-                  fontSize: 10,
-                  color: 'rgba(90,138,176,0.6)',
-                  lineHeight: 1.5,
-                }}>
-                  {item.note}
-                </p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{range.note}</p>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
 
-        {/* How it works */}
-        <div style={{
-          border: '1px solid rgba(14,32,53,1)',
-          background: 'rgba(7,16,28,0.9)',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '10px 16px',
-            borderBottom: '1px solid rgba(14,32,53,1)',
-            background: 'rgba(0,212,255,0.02)',
-          }}>
-            <span style={{
-              fontFamily: "'Share Tech Mono',monospace",
-              fontSize: 9,
-              letterSpacing: '0.25em',
-              color: 'rgba(90,138,176,0.6)',
-              textTransform: 'uppercase',
-            }}>
-              ◈ Method
-            </span>
-          </div>
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Card>
+          <SectionHeader title="Method" subtitle="What the lineup module is designed to do" accent="Model" />
+          <div className="space-y-3">
             {[
-              { icon: '⬡', color: '#00d4ff', label: 'BGE-M3 Embeddings', desc: 'Posts encoded as 1024-dim vectors capturing semantic + behavioral patterns.' },
-              { icon: '◈', color: '#00ff88', label: 'ChromaDB Search', desc: 'Cosine similarity against the full post vector store.' },
-              { icon: '◉', color: '#ffcc00', label: 'Analyst Layer', desc: 'Scores shown with explicit uncertainty. You decide identity, not the model.' },
-            ].map(item => (
-              <div key={item.label} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <span style={{ color: item.color, fontSize: 16, flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
-                <div>
-                  <div style={{
-                    fontFamily: "'Share Tech Mono',monospace",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: item.color,
-                    marginBottom: 3,
-                  }}>
-                    {item.label}
-                  </div>
-                  <p style={{
-                    fontFamily: "'Share Tech Mono',monospace",
-                    fontSize: 10,
-                    color: 'rgba(90,138,176,0.6)',
-                    lineHeight: 1.6,
-                  }}>
-                    {item.desc}
-                  </p>
-                </div>
+              'Embeddings capture semantic and behavioral patterns instead of relying on exact wording only.',
+              'Results are grouped by source cluster to help analysts spot cross-source patterns quickly.',
+              'Scores are advisory and intentionally stop short of claiming actor identity.',
+            ].map((item) => (
+              <div key={item} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                {item}
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   </div>

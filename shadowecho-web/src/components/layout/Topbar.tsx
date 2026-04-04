@@ -1,103 +1,95 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Bell, LogOut, Search, Settings, User } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+
+const pageTitles: Record<string, string> = {
+  '/': 'Dashboard',
+  '/alerts': 'Alerts',
+  '/decode': 'Decoder',
+  '/mirror': 'Mirror',
+  '/impact': 'Analytics',
+  '/lineup': 'Lineup',
+  '/report': 'Reports',
+  '/chat': 'Assistant',
+};
 
 const Topbar: React.FC = () => {
-  const [time, setTime] = useState(new Date());
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(interval);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  return (
-    <header
-      className="sticky top-0 z-30 flex items-center justify-between border-b px-6 py-4 backdrop-blur-xl"
-      style={{
-        background: 'linear-gradient(180deg, rgba(7,16,24,0.92), rgba(7,16,24,0.78))',
-        borderColor: 'rgba(128, 152, 168, 0.12)',
-      }}
-    >
-      <div className="flex items-center gap-4">
-        <div
-          className="grid h-12 w-12 place-items-center rounded-2xl border"
-          style={{
-            borderColor: 'rgba(91, 228, 183, 0.22)',
-            background: 'linear-gradient(135deg, rgba(91,228,183,0.14), rgba(135,191,255,0.1))',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
-          }}
-        >
-          <img
-            src="/shadowecho-logo.png"
-            alt="ShadowEcho"
-            className="h-8 w-8 object-contain select-none"
-            draggable={false}
-          />
-        </div>
+  const title = useMemo(
+    () => pageTitles[location.pathname] ?? 'ShadowEcho',
+    [location.pathname],
+  );
 
-        <div className="min-w-0">
-          <div
-            className="font-mono text-[10px] uppercase"
-            style={{ color: 'rgba(157, 176, 188, 0.72)', letterSpacing: '0.26em' }}
-          >
-            SecOps Command Surface
-          </div>
-          <div className="mt-1 flex items-center gap-3">
-            <span
-              className="font-['Sora'] text-[20px] font-semibold"
-              style={{ color: '#edf5f1' }}
-            >
-              ShadowEcho
-            </span>
-            <span
-              className="rounded-full border px-3 py-1 font-mono text-[9px] uppercase"
-              style={{
-                borderColor: 'rgba(135, 191, 255, 0.2)',
-                color: 'rgba(175, 212, 234, 0.84)',
-                letterSpacing: '0.18em',
-                background: 'rgba(135, 191, 255, 0.08)',
-              }}
-            >
-              Threat Monitoring
-            </span>
-          </div>
-        </div>
+  return (
+    <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
+      <div className="min-w-0">
+        <h1 className="truncate text-lg font-semibold text-slate-900">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div
-          className="hidden items-center gap-2 rounded-full border px-4 py-2 md:flex"
-          style={{
-            borderColor: 'rgba(128, 152, 168, 0.16)',
-            background: 'rgba(17, 29, 43, 0.72)',
-          }}
-        >
-          <span className="h-2.5 w-2.5 rounded-full bg-[#5be4b7] shadow-[0_0_12px_rgba(91,228,183,0.85)]" />
-          <span
-            className="font-mono text-[10px] uppercase"
-            style={{ color: '#d8efe8', letterSpacing: '0.2em' }}
-          >
-            Detection Pipeline Live
-          </span>
-        </div>
+      <div className="mx-6 hidden max-w-xl flex-1 lg:block">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            placeholder="Search alerts, indicators, or incidents"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+      </div>
 
-        <div
-          className="rounded-[18px] border px-4 py-2"
-          style={{
-            borderColor: 'rgba(128, 152, 168, 0.14)',
-            background: 'linear-gradient(180deg, rgba(17,29,43,0.82), rgba(13,23,35,0.86))',
-          }}
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          className="relative rounded-full p-2 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+          aria-label="Notifications"
         >
-          <div
-            className="font-mono text-[9px] uppercase"
-            style={{ color: 'rgba(157, 176, 188, 0.56)', letterSpacing: '0.16em' }}
+          <Bell className="h-5 w-5" />
+          <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+        </button>
+
+        <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-2 py-1.5 transition hover:border-slate-300 hover:bg-slate-50"
           >
-            Local Time
-          </div>
-          <div
-            className="mt-1 font-['Sora'] text-base font-semibold tabular-nums"
-            style={{ color: '#edf5f1' }}
-          >
-            {time.toLocaleTimeString()}
-          </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
+              SE
+            </div>
+          </button>
+
+          {menuOpen ? (
+            <div className="absolute right-0 top-12 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg shadow-slate-200/70">
+              {[
+                { label: 'Profile', icon: User },
+                { label: 'Settings', icon: Settings },
+                { label: 'Logout', icon: LogOut },
+              ].map(({ label, icon: Icon }) => (
+                <button
+                  key={label}
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     </header>
