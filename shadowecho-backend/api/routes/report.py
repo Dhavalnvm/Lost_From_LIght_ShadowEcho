@@ -14,12 +14,12 @@ Uses llama3.2:3b (chatbot model) — faster than 8b, sufficient for prose.
 Export: /api/report/export returns plain text for download.
 """
 
-import json
 import logging
 import time
 from datetime import datetime, timezone
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 import httpx
 
 from config import OLLAMA_BASE_URL, CHATBOT_MODEL, CHATBOT_TIMEOUT
@@ -32,6 +32,17 @@ from db.database import get_connection
 
 log = logging.getLogger("api.report")
 router = APIRouter(prefix="/api/report", tags=["report"])
+
+
+# ---------------------------------------------------------------------------
+# REQUEST SCHEMA  (matches the frontend payload in ReportView.tsx)
+# ---------------------------------------------------------------------------
+
+class ReportRequest(BaseModel):
+    org_name: str = Field(default="", description="Optional org name to highlight in the report")
+    timeframe: str = Field(default="7d", description="Lookback window: 24h | 7d | 30d")
+    focus: str = Field(default="", description="Analyst focus area (free text)")
+    include_recommendations: bool = Field(default=True, description="Whether to call LLM for prose sections")
 
 
 # ---------------------------------------------------------------------------
@@ -150,17 +161,23 @@ Keep each recommendation to 1-2 sentences. No markdown headers."""
 # ---------------------------------------------------------------------------
 
 @router.post("")
-async def generate_report(
-    org_focus: str = Query(default="", description="Optional org name to highlight"),
-    include_llm: bool = Query(default=True, description="Whether to call LLM for prose sections"),
-):
+async def generate_report(req: ReportRequest):
     """
     Generate a full threat intelligence report.
     Pulls all data from DB, optionally calls LLM for executive summary + recommendations.
     Returns structured JSON with all sections.
+
+    Request body (all optional):
+      org_name              – highlight a specific org (e.g. "Acme Corp")
+      timeframe             – 24h | 7d | 30d  (informational; stored in response)
+      focus                 – free-text analyst focus hint passed to LLM
+      include_recommendations – whether to call LLM for prose sections
     """
+    org_focus  = req.org_name
+    include_llm = req.include_recommendations
+
     start = time.time()
-    log.info(f"Report generation started (include_llm={include_llm}, org='{org_focus}')")
+    log.info(f"Report generation started (include_llm={include_llm}, org='{org_focus}', timeframe='{req.timeframe}')")
 
     # ── Gather data ──────────────────────────────────────────────────────────
     stats        = get_dashboard_stats()
@@ -221,9 +238,10 @@ async def generate_report(
 
     if include_llm:
         log.info("Calling LLM for executive summary...")
-        executive_summary = await _llm_section(
-            _build_exec_prompt(stats, all_alerts, critical_alerts)
-        )
+        exec_prompt = _build_exec_prompt(stats, all_alerts, critical_alerts)
+        if req.focus:
+            exec_prompt += f"\n\nAnalyst focus area: {req.focus}"
+        executive_summary = await _llm_section(exec_prompt)
         log.info("Calling LLM for recommendations...")
         recommendations = await _llm_section(
             _build_recommendations_prompt(stats, all_alerts)
@@ -234,9 +252,32 @@ async def generate_report(
 
     log.info(f"Report generated in {duration_ms}ms")
 
+    # Build a human-readable title
+    title_parts = ["ShadowEcho Threat Intelligence Report"]
+    if org_focus:
+        title_parts.append(f"— {org_focus}")
+    title_parts.append(f"({req.timeframe})")
+    report_title = " ".join(title_parts)
+
+    # Split LLM recommendations string into a list for the frontend
+    recommendations_list: list[str] = []
+    if recommendations:
+        for line in recommendations.splitlines():
+            line = line.strip()
+            if line and (line[0].isdigit() or line.startswith(("–", "-", "•"))):
+                cleaned = line.lstrip("0123456789.–-• ").strip()
+                if cleaned:
+                    recommendations_list.append(cleaned)
+        # Fallback if no structured list detected
+        if not recommendations_list and recommendations.strip():
+            recommendations_list = [p.strip() for p in recommendations.split("\n\n") if p.strip()]
+
     return {
+        "title": report_title,
         "generated_at": generated_at,
-        "org_focus": org_focus or None,
+        "org_name": org_focus or None,
+        "timeframe": req.timeframe,
+        "focus": req.focus or None,
         "duration_ms": duration_ms,
         "include_llm": include_llm,
 
@@ -259,7 +300,7 @@ async def generate_report(
 
         # ── LLM sections ──────────────────────────────────────────────────
         "executive_summary": executive_summary,
-        "recommendations": recommendations,
+        "recommendations": recommendations_list,   # list[str] for the frontend
 
         # ── Data sections ─────────────────────────────────────────────────
         "critical_alerts": [
@@ -280,23 +321,29 @@ async def generate_report(
     }
 
 
-@router.get("/export")
-async def export_report(
-    org_focus: str = Query(default=""),
-    include_llm: bool = Query(default=False),   # default False for fast export
-):
+@router.post("/export")
+async def export_report(req: ReportRequest):
     """
     Export a plain-text version of the report (for download / copy).
-    include_llm=false by default so it's instant — set true for LLM prose.
+    Accepts the same ReportRequest body as POST /api/report.
+    include_recommendations defaults to False for fast export; set True for LLM prose.
     """
-    data = await generate_report(org_focus=org_focus, include_llm=include_llm)
+    # For export, default to no LLM unless explicitly requested
+    export_req = ReportRequest(
+        org_name=req.org_name,
+        timeframe=req.timeframe,
+        focus=req.focus,
+        include_recommendations=req.include_recommendations,
+    )
+    data = await generate_report(export_req)
 
     ov = data["overview"]
     lines = [
         "=" * 72,
         "SHADOWECHO — THREAT INTELLIGENCE REPORT",
         f"Generated : {data['generated_at']}",
-        f"Org Focus : {data['org_focus'] or 'All Organizations'}",
+        f"Org Focus : {data['org_name'] or 'All Organizations'}",
+        f"Timeframe : {data['timeframe']}",
         "=" * 72,
         "",
     ]
@@ -347,7 +394,10 @@ async def export_report(
         lines.append("")
 
     if data["recommendations"]:
-        lines += ["RECOMMENDATIONS", "-" * 40, data["recommendations"], ""]
+        recs_text = "\n".join(
+            f"{i+1}. {r}" for i, r in enumerate(data["recommendations"])
+        )
+        lines += ["RECOMMENDATIONS", "-" * 40, recs_text, ""]
 
     lines += ["=" * 72, "END OF REPORT — ShadowEcho v1.2.0", "=" * 72]
 
