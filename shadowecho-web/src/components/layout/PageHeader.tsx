@@ -7,15 +7,15 @@ interface PageHeaderProps {
 }
 
 const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, action }) => (
-  <div className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+  <div className="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div className="min-w-0">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-600">
-        ShadowEcho Module
-      </div>
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-900">{title}</h1>
-      {subtitle ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{subtitle}</p> : null}
+      <p className="mb-1 text-xs font-medium uppercase tracking-wider text-slate-500">ShadowEcho</p>
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-900">{title}</h1>
+
+      {subtitle && <p className="mt-2 max-w-3xl text-base leading-relaxed text-slate-600">{subtitle}</p>}
     </div>
-    {action ? <div className="flex items-center gap-3">{action}</div> : null}
+
+    <div className="flex shrink-0 items-center gap-3 self-start sm:self-center">{action}</div>
   </div>
 );
 

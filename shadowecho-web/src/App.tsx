@@ -10,6 +10,7 @@ import AnalyticsView from './views/AnalyticsView';
 import DashboardView from './views/DashboardView';
 import LineupView from './views/LineupView';
 import MirrorView from './views/MirrorView';
+import NotebookView from './views/NotebookView';
 import ReportView from './views/ReportView';
 
 const App: React.FC = () => {
@@ -33,6 +34,7 @@ const App: React.FC = () => {
               <Route path="/impact" element={<AnalyticsView />} />
               <Route path="/lineup" element={<LineupView />} />
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/notebook" element={<NotebookView />} />
               <Route path="/report" element={<ReportView />} />
             </Routes>
           </div>

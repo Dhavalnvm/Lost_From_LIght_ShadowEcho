@@ -25,6 +25,7 @@ import {
   Legend,
 } from 'recharts';
 import type { TimeSeriesPoint } from '../../types/api';
+import { CHART } from '../../constants/chartColors';
 import { Card, SectionHeader } from '../common';
 import DarkTooltip from '../ui/DarkTooltip';
 
@@ -35,25 +36,24 @@ interface Props {
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
 const T = {
-  bg3:    '#0a1525',
-  border: '#0f2034',
-  border2:'#162d47',
-  text2:  '#5a8ab0',
-  text3:  '#263d52',
-  red:    '#f0263e',
-  orange: '#f07020',
-  yellow: '#f0c800',
-  low:    '#4a5568',
-  green:  '#00e87a',
-  mono:   "'JetBrains Mono', monospace",
-  disp:   "'Syne', sans-serif",
+  border: '#e2e8f0',
+  border2: CHART.slate300,
+  text2:  '#475569',
+  text3:  '#94a3b8',
+  red:    CHART.red600,
+  orange: CHART.orange500,
+  yellow: CHART.amber500,
+  low:    CHART.emerald500,
+  green:  CHART.emerald500,
+  mono:   'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  disp:   'Inter, system-ui, sans-serif',
 } as const;
 
 // ── Shared chart config ───────────────────────────────────────────────────────
 
 const AXIS_TICK = {
   fill: T.text2,
-  fontSize: 11,
+  fontSize: 13,
   fontFamily: T.mono,
 };
 
@@ -68,7 +68,7 @@ const Y_AXIS_PROPS = {
   axisLine: false as const,
   tickLine: false as const,
   allowDecimals: false as const,
-  width: 32,
+  width: 44,
 };
 
 const X_AXIS_PROPS = {
@@ -81,28 +81,20 @@ const X_AXIS_PROPS = {
 // ── Severity palette ──────────────────────────────────────────────────────────
 
 const SEV_COLORS: Record<string, string> = {
-  critical: T.red,
-  high:     T.orange,
-  medium:   T.yellow,
-  low:      T.low,
+  critical: CHART.red400,
+  high:     CHART.orange500,
+  medium:   CHART.amber400,
+  low:      CHART.emerald500,
 };
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 const EmptyChart: React.FC<{ height?: number }> = ({ height = 220 }) => (
   <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height,
-      fontFamily: T.mono,
-      fontSize: 12,
-      color: T.text3,
-      letterSpacing: 2,
-    }}
+    className="flex items-center justify-center text-sm text-slate-500"
+    style={{ height, fontFamily: T.mono }}
   >
-    Collecting data points…
+    No data found
   </div>
 );
 
@@ -147,7 +139,7 @@ const CustomLegend: React.FC<{ payload?: LegendPayload[] }> = ({ payload }) => {
           <span
             style={{
               fontFamily: T.mono,
-              fontSize: 10,
+              fontSize: 12,
               color: T.text2,
               letterSpacing: 0.5,
             }}
@@ -256,18 +248,18 @@ export const SignalTrendChart: React.FC<Props> = ({ data }) => (
             <Bar
               dataKey="total_posts"
               name="Total Posts"
-              fill="rgba(26,52,80,0.9)"
-              stroke={T.border2}
+              fill={CHART.slate400}
+              stroke={CHART.slate300}
               strokeWidth={0.5}
+              opacity={0.85}
               isAnimationActive={false}
             />
 
-            {/* Signals — bright green, overlaid */}
             <Bar
               dataKey="signals"
               name="Signals"
-              fill={T.green}
-              opacity={0.85}
+              fill={CHART.blue500}
+              opacity={0.9}
               isAnimationActive={false}
             />
           </BarChart>
@@ -296,9 +288,9 @@ export const SignalTrendChart: React.FC<Props> = ({ data }) => (
                 <span
                   style={{
                     fontFamily: T.mono,
-                    fontSize: 9,
+                    fontSize: 11,
                     color: T.text3,
-                    letterSpacing: 2,
+                    letterSpacing: 1,
                     textTransform: 'uppercase',
                     marginRight: 8,
                   }}
@@ -308,7 +300,7 @@ export const SignalTrendChart: React.FC<Props> = ({ data }) => (
                 <span
                   style={{
                     fontFamily: T.disp,
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 700,
                     color: T.text2,
                   }}
@@ -317,33 +309,22 @@ export const SignalTrendChart: React.FC<Props> = ({ data }) => (
                 </span>
               </div>
               <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '3px 10px',
-                  background: 'rgba(0,232,122,0.07)',
-                  border: `1px solid rgba(0,232,122,0.2)`,
-                }}
+                className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1"
               >
                 <span
                   style={{
                     fontFamily: T.mono,
-                    fontSize: 9,
+                    fontSize: 11,
                     color: T.text3,
-                    letterSpacing: 1.5,
+                    letterSpacing: 1,
                     textTransform: 'uppercase',
                   }}
                 >
                   SNR
                 </span>
                 <span
-                  style={{
-                    fontFamily: T.disp,
-                    fontSize: 16,
-                    fontWeight: 800,
-                    color: T.green,
-                  }}
+                  className="text-lg font-bold text-emerald-600"
+                  style={{ fontFamily: T.disp }}
                 >
                   {rate}%
                 </span>

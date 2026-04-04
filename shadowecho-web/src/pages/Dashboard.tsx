@@ -639,12 +639,6 @@ const Dashboard: React.FC = () => {
 
       {error ? <ErrorBanner message={error} /> : null}
 
-      {isDemoMode ? (
-        <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-violet-700">
-          Demo mode - showing representative data. Connect scraper to populate live feed.
-        </div>
-      ) : null}
-
       <StatsCards
         totalThreats={totalThreats}
         criticalAlerts={criticalAlerts}

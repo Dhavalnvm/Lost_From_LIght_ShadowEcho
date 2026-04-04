@@ -21,9 +21,10 @@ import type {
   ImpactQuickResponse,
   ChatResponse,
   ChatMessage,
+  NotebookRequest,
+  NotebookResponse,
   ReportRequest,
   ReportResponse,
-  ReportExportResponse,
 } from '../types/api';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -158,10 +159,24 @@ export const generateReport = (
     body: JSON.stringify(payload),
   });
 
-export const exportReport = (
-  payload: ReportRequest
-): Promise<ReportExportResponse> =>
-  apiFetch('/api/report/export', {
+export const exportReport = async (payload: ReportRequest): Promise<string> => {
+  const res = await fetch(`${BASE_URL}/api/report/export`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+  return res.text();
+};
+// ─── Notebook ─────────────────────────────────────────────────────────────────
+
+export const fetchNotebook = (
+  payload: NotebookRequest
+): Promise<NotebookResponse> =>
+  apiFetch('/api/notebook', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
