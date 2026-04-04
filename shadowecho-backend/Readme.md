@@ -22,6 +22,10 @@ All inference runs locally via Ollama. No data is sent to external APIs.
 ---
 
 ## Architecture
+<img width="1440" height="2076" alt="image" src="https://github.com/user-attachments/assets/61f18570-e828-481d-971a-1249d22bdcff" />
+
+
+## Dataflow
 
 ```mermaid
 flowchart TD
@@ -321,3 +325,7 @@ python test_api.py
 | `API_HOST` | `0.0.0.0` | FastAPI bind address |
 | `API_PORT` | `8000` | FastAPI port |
 | `ORG_WATCHLIST` | — | Comma-separated org names to monitor |
+
+## Busniees Model
+<img width="1440" height="2288" alt="image" src="https://github.com/user-attachments/assets/5d4569e6-a579-471c-b91f-1aa5beee7f81" />
+
